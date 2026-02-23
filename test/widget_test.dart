@@ -5,26 +5,32 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:tema_oscuro/main.dart';
+import 'package:tema_oscuro/app/app.dart';
+import 'package:tema_oscuro/app/di/service_locator.dart';
+import 'package:tema_oscuro/core/firebase/firebase_initializer.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    await setupDependencies();
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  testWidgets('App routes according to Firebase/Auth state', (WidgetTester tester) async {
+    await tester.pumpWidget(const DentalIntegralApp());
+    await tester.pumpAndSettle();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    final status = getIt<FirebaseInitStatus>();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    if (status.isSuccess) {
+      expect(find.text('Iniciar sesión'), findsOneWidget);
+      expect(find.text('Dental Integral'), findsOneWidget);
+    } else {
+      expect(find.text('Configurar Firebase'), findsOneWidget);
+      expect(
+        find.text('Firebase todavía no está configurado para este proyecto.'),
+        findsOneWidget,
+      );
+    }
   });
 }

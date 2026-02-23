@@ -1,0 +1,30 @@
+{
+	"flutter": {
+		"platforms": {
+			"android": {
+				"default": {
+					"projectId": "dentalintegral-94298",
+					"appId": "1:643275765267:android:02aa118afdd49ce4c671e6",
+					"fileOutput": "android/app/google-services.json"
+				}
+			},
+			"dart": {
+				"lib/firebase_options.dart": {
+					"projectId": "dentalintegral-94298",
+					"configurations": {
+						"android": "1:643275765267:android:02aa118afdd49ce4c671e6",
+						"ios": "1:643275765267:ios:000cab0e3f537d0ec671e6",
+						"windows": "1:643275765267:web:de858532ab993e8dc671e6"
+					}
+				}
+			}
+		}
+	},
+	"functions": {
+		"source": "functions",
+		"runtime": "nodejs20"
+	},
+	"firestore": {
+		"rules": "firestore.rules"
+	}
+}

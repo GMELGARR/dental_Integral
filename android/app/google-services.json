@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "643275765267",
+    "project_id": "dentalintegral-94298",
+    "storage_bucket": "dentalintegral-94298.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:643275765267:android:02aa118afdd49ce4c671e6",
+        "android_client_info": {
+          "package_name": "com.example.tema_oscuro"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCDS-y7ERGwcJyvCDJ3bqN_HJbzBPJ6rYM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
