@@ -53,61 +53,112 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     );
   }
 
+  InputDecoration _fieldDecoration({
+    required String label,
+    required IconData icon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+      ),
+      filled: true,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Restablecer contraseña')),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: AnimatedBuilder(
-              animation: _controller,
-              builder: (context, _) {
-                return Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Text(
-                        'Ingresa tu correo para enviarte el enlace de recuperación.',
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(
-                          labelText: 'Correo',
-                          border: OutlineInputBorder(),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 460),
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (context, _) {
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            CircleAvatar(
+                              radius: 30,
+                              backgroundColor: theme.colorScheme.tertiaryContainer,
+                              child: Icon(
+                                Icons.mark_email_unread_outlined,
+                                color: theme.colorScheme.onTertiaryContainer,
+                                size: 30,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Restablecer contraseña',
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Ingresa tu correo y te enviaremos un enlace de recuperación.',
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            TextFormField(
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              decoration: _fieldDecoration(
+                                label: 'Correo',
+                                icon: Icons.alternate_email,
+                              ),
+                              validator: (value) {
+                                final email = value?.trim() ?? '';
+                                if (email.isEmpty) {
+                                  return 'Ingresa tu correo.';
+                                }
+                                if (!email.contains('@')) {
+                                  return 'Correo inválido.';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 20),
+                            FilledButton(
+                              onPressed: _controller.isLoading ? null : _sendResetLink,
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                              ),
+                              child: _controller.isLoading
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : const Text('Enviar enlace'),
+                            ),
+                            const SizedBox(height: 6),
+                            TextButton(
+                              onPressed: _controller.isLoading ? null : () => Navigator.of(context).pop(),
+                              child: const Text('Volver al inicio de sesión'),
+                            ),
+                          ],
                         ),
-                        validator: (value) {
-                          final email = value?.trim() ?? '';
-                          if (email.isEmpty) {
-                            return 'Ingresa tu correo.';
-                          }
-                          if (!email.contains('@')) {
-                            return 'Correo inválido.';
-                          }
-                          return null;
-                        },
                       ),
-                      const SizedBox(height: 16),
-                      FilledButton(
-                        onPressed: _controller.isLoading ? null : _sendResetLink,
-                        child: _controller.isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Text('Enviar enlace'),
-                      ),
-                    ],
-                  ),
-                );
-              },
+                    ),
+                  );
+                },
+              ),
             ),
           ),
         ),

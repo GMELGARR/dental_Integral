@@ -11,10 +11,11 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final authSession = getIt<AuthSessionController>();
     final email = authSession.currentUser?.email ?? 'usuario';
+    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Dental Integral'),
+        title: const Text('Inicio'),
         actions: [
           IconButton(
             onPressed: () async {
@@ -26,29 +27,82 @@ class HomePage extends StatelessWidget {
         ],
       ),
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text(
-                'Bienvenido',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Sesión iniciada como: $email',
-                textAlign: TextAlign.center,
-              ),
-              if (authSession.isAdmin) ...[
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 28,
+                          backgroundColor: theme.colorScheme.primaryContainer,
+                          child: Icon(
+                            Icons.medical_services_outlined,
+                            color: theme.colorScheme.onPrimaryContainer,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Bienvenido a Dental Integral',
+                                style: theme.textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Sesión iniciada como: $email',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: () => context.push('/admin/users'),
-                  icon: const Icon(Icons.admin_panel_settings_outlined),
-                  label: const Text('Administrar usuarios'),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Acciones rápidas',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (authSession.isAdmin)
+                          FilledButton.icon(
+                            onPressed: () => context.push('/admin/users'),
+                            icon: const Icon(Icons.admin_panel_settings_outlined),
+                            label: const Text('Administrar usuarios'),
+                          )
+                        else
+                          Text(
+                            'Tu cuenta está activa. Los módulos disponibles se mostrarán aquí según tus permisos.',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
-            ],
+            ),
           ),
         ),
       ),
