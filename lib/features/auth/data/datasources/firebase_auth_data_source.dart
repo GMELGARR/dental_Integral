@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -11,38 +13,80 @@ class FirebaseAuthDataSource {
   final FirebaseAuth _firebaseAuth;
   final FirebaseFirestore _firestore;
 
+  /// Observes the auth state and enriches it with Firestore profile data.
+  ///
+  /// Uses manual switchMap semantics: when a new auth event arrives the
+  /// previous Firestore snapshot subscription is cancelled immediately,
+  /// which avoids the "stuck queue" bug of [asyncExpand] with infinite
+  /// inner streams.
   Stream<AuthUser?> observeAuthState() {
-    return _firebaseAuth.authStateChanges().asyncExpand((firebaseUser) {
-      if (firebaseUser == null) {
-        return Stream<AuthUser?>.value(null);
-      }
+    final controller = StreamController<AuthUser?>.broadcast();
+    StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? innerSub;
 
-      final userDocStream = _firestore.collection('users').doc(firebaseUser.uid).snapshots();
+    final outerSub = _firebaseAuth.authStateChanges().listen(
+      (firebaseUser) {
+        // Always cancel the previous Firestore listener first.
+        innerSub?.cancel();
+        innerSub = null;
 
-      return userDocStream.asyncMap((userDoc) async {
-        final idTokenResult = await firebaseUser.getIdTokenResult(true);
-        final role = idTokenResult.claims?['role'] as String?;
+        if (firebaseUser == null) {
+          controller.add(null);
+          return;
+        }
 
-        final userData = userDoc.data();
-        final active = (userData?['active'] as bool?) ?? true;
-        final modulesRaw = (userData?['modules'] as List<dynamic>? ?? <dynamic>[])
-            .map((entry) => entry.toString())
-            .toList();
+        // Subscribe to the Firestore user document.
+        innerSub = _firestore
+            .collection('users')
+            .doc(firebaseUser.uid)
+            .snapshots()
+            .listen(
+          (userDoc) async {
+            try {
+              final idTokenResult =
+                  await firebaseUser.getIdTokenResult(true);
+              final role = idTokenResult.claims?['role'] as String?;
 
-        final modules = modulesRaw
-            .map(modulePermissionFromKey)
-            .whereType<ModulePermission>()
-            .toList(growable: false);
+              final userData = userDoc.data();
+              final active = (userData?['active'] as bool?) ?? true;
+              final modulesRaw =
+                  (userData?['modules'] as List<dynamic>? ?? <dynamic>[])
+                      .map((e) => e.toString())
+                      .toList();
 
-        return AuthUser(
-          id: firebaseUser.uid,
-          email: firebaseUser.email,
-          isAdmin: role == 'admin',
-          active: active,
-          modules: modules,
+              final modules = modulesRaw
+                  .map(modulePermissionFromKey)
+                  .whereType<ModulePermission>()
+                  .toList(growable: false);
+
+              controller.add(AuthUser(
+                id: firebaseUser.uid,
+                email: firebaseUser.email,
+                isAdmin: role == 'admin',
+                active: active,
+                modules: modules,
+              ));
+            } catch (e) {
+              // If token refresh fails (e.g. user signed out mid-flight),
+              // silently ignore – the next authStateChanges event will
+              // resolve the state.
+            }
+          },
+          onError: (_) {
+            // Firestore permission errors after sign-out are expected.
+          },
         );
-      });
-    });
+      },
+      onError: (Object error) {
+        controller.addError(error);
+      },
+    );
+
+    controller.onCancel = () {
+      outerSub.cancel();
+      innerSub?.cancel();
+    };
+
+    return controller.stream;
   }
 
   Future<void> signInWithEmailAndPassword({
