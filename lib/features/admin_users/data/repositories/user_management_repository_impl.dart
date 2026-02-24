@@ -25,4 +25,21 @@ class UserManagementRepositoryImpl implements UserManagementRepository {
       modules: modules,
     );
   }
+
+  @override
+  Future<void> createUser({
+    required String email,
+    required String password,
+    required String displayName,
+    required String role,
+    required List<ModulePermission> modules,
+  }) {
+    return _dataSource.createUser(
+      email: email,
+      password: password,
+      displayName: displayName,
+      role: role,
+      modules: modules,
+    );
+  }
 }

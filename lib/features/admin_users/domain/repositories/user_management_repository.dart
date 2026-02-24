@@ -9,4 +9,12 @@ abstract class UserManagementRepository {
     required bool active,
     required List<ModulePermission> modules,
   });
+
+  Future<void> createUser({
+    required String email,
+    required String password,
+    required String displayName,
+    required String role,
+    required List<ModulePermission> modules,
+  });
 }

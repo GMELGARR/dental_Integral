@@ -223,16 +223,63 @@ class _AdminUserManagementPageState extends State<AdminUserManagementPage> {
     }
   }
 
+  // ── Create user bottom sheet ───────────────────────────────────
+  Future<void> _createUser() async {
+    final result = await showModalBottomSheet<_CreateUserResult>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _CreateUserSheet(moduleIconBuilder: _moduleIcon),
+    );
+
+    if (result == null || !mounted) return;
+
+    final success = await _controller.createUser(
+      email: result.email,
+      password: result.password,
+      displayName: result.name,
+      role: result.role,
+      modules: result.modules,
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? 'Usuario "${result.name}" creado exitosamente.'
+              : (_controller.errorMessage ?? 'No se pudo crear el usuario.'),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      body: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          return CustomScrollView(
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        return Scaffold(
+          // ── FAB: Create new user ──────────────────────────
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: _controller.isCreating ? null : _createUser,
+            icon: _controller.isCreating
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.person_add_rounded),
+            label:
+                Text(_controller.isCreating ? 'Creando...' : 'Nuevo usuario'),
+          ),
+          body: CustomScrollView(
             slivers: [
               // ── Gradient header ───────────────────────
               SliverToBoxAdapter(
@@ -334,7 +381,7 @@ class _AdminUserManagementPageState extends State<AdminUserManagementPage> {
                           const SizedBox(width: AppSpacing.md),
                           Expanded(
                             child: Text(
-                              'Crear cuentas con: scripts/admin/create_staff_user.js',
+                              'Usa el botón "Nuevo usuario" para crear cuentas de personal.',
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 fontSize: 12.5,
                               ),
@@ -371,7 +418,7 @@ class _AdminUserManagementPageState extends State<AdminUserManagementPage> {
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Text(
-                          'Usa el script de creación para agregar personal.',
+                          'Presiona "Nuevo usuario" para agregar personal.',
                           style: theme.textTheme.bodyMedium,
                         ),
                       ],
@@ -409,8 +456,314 @@ class _AdminUserManagementPageState extends State<AdminUserManagementPage> {
                 child: SizedBox(height: AppSpacing.xxxl),
               ),
             ],
-          );
-        },
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ── Create user result ─────────────────────────────────────────────
+class _CreateUserResult {
+  const _CreateUserResult({
+    required this.name,
+    required this.email,
+    required this.password,
+    required this.role,
+    required this.modules,
+  });
+
+  final String name;
+  final String email;
+  final String password;
+  final String role;
+  final List<ModulePermission> modules;
+}
+
+// ── Create user sheet ─────────────────────────────────────────────
+class _CreateUserSheet extends StatefulWidget {
+  const _CreateUserSheet({required this.moduleIconBuilder});
+
+  final IconData Function(ModulePermission) moduleIconBuilder;
+
+  @override
+  State<_CreateUserSheet> createState() => _CreateUserSheetState();
+}
+
+class _CreateUserSheetState extends State<_CreateUserSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+  final _selectedModules = <ModulePermission>{ModulePermission.dashboard};
+  String _selectedRole = 'staff';
+  bool _obscure = true;
+
+  static const _roles = {
+    'admin': 'Admin',
+    'staff': 'Staff',
+    'odontologo': 'Odontólogo',
+  };
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    if (_selectedModules.isEmpty) return;
+
+    Navigator.of(context).pop(
+      _CreateUserResult(
+        name: _nameCtrl.text.trim(),
+        email: _emailCtrl.text.trim(),
+        password: _passwordCtrl.text,
+        role: _selectedRole,
+        modules: _selectedModules.toList(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.xxl,
+          AppSpacing.sm,
+          AppSpacing.xxl,
+          MediaQuery.of(context).viewInsets.bottom + AppSpacing.xxl,
+        ),
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Header ──────────────────────────
+                Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.person_add_rounded,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Nuevo usuario',
+                            style: theme.textTheme.titleLarge,
+                          ),
+                          Text(
+                            'Se creará una cuenta de personal',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                const Divider(),
+                const SizedBox(height: AppSpacing.lg),
+
+                // ── Name ────────────────────────────
+                TextFormField(
+                  controller: _nameCtrl,
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Nombre completo',
+                    prefixIcon: Icon(Icons.person_outline_rounded),
+                  ),
+                  validator: (v) {
+                    if ((v ?? '').trim().isEmpty) {
+                      return 'Ingresa el nombre.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: AppSpacing.lg),
+
+                // ── Email ───────────────────────────
+                TextFormField(
+                  controller: _emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Correo electrónico',
+                    prefixIcon: Icon(Icons.alternate_email),
+                  ),
+                  validator: (v) {
+                    final email = v?.trim() ?? '';
+                    if (email.isEmpty) return 'Ingresa el correo.';
+                    if (!email.contains('@')) {
+                      return 'Correo inválido.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: AppSpacing.lg),
+
+                // ── Password ────────────────────────
+                TextFormField(
+                  controller: _passwordCtrl,
+                  obscureText: _obscure,
+                  textInputAction: TextInputAction.done,
+                  decoration: InputDecoration(
+                    labelText: 'Contraseña temporal',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      onPressed: () => setState(() => _obscure = !_obscure),
+                      icon: Icon(
+                        _obscure
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                      ),
+                    ),
+                  ),
+                  validator: (v) {
+                    if ((v ?? '').length < 6) {
+                      return 'Mínimo 6 caracteres.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: AppSpacing.xl),
+
+                // ── Role selector ───────────────────
+                Text('Rol', style: theme.textTheme.titleMedium),
+                const SizedBox(height: AppSpacing.sm),
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedRole,
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.badge_outlined),
+                  ),
+                  items: _roles.entries
+                      .map(
+                        (e) => DropdownMenuItem(
+                          value: e.key,
+                          child: Text(e.value),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) {
+                    if (v != null) setState(() => _selectedRole = v);
+                  },
+                ),
+                const SizedBox(height: AppSpacing.xl),
+
+                // ── Module permissions ──────────────
+                Text(
+                  'Permisos de módulos',
+                  style: theme.textTheme.titleMedium,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                ...ModulePermission.values.map(
+                  (p) => CheckboxListTile(
+                    value: _selectedModules.contains(p),
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(p.label),
+                    secondary: Icon(
+                      widget.moduleIconBuilder(p),
+                      color: theme.colorScheme.primary,
+                      size: 20,
+                    ),
+                    onChanged: (checked) {
+                      setState(() {
+                        if (checked == true) {
+                          _selectedModules.add(p);
+                        } else {
+                          _selectedModules.remove(p);
+                        }
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+
+                // ── Actions ─────────────────────────
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Cancelar'),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: FilledButton.icon(
+                          onPressed: _submit,
+                          icon: const Icon(
+                            Icons.person_add_rounded,
+                            size: 18,
+                          ),
+                          label: const Text('Crear'),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Role badge ─────────────────────────────────────────────────────
+class _RoleBadge extends StatelessWidget {
+  const _RoleBadge({required this.role});
+
+  final String role;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = switch (role) {
+      'admin' => ('Admin', AppColors.primary),
+      'odontologo' => ('Odontólogo', AppColors.info),
+      _ => ('Staff', AppColors.textSecondaryLight),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
       ),
     );
   }
@@ -466,25 +819,7 @@ class _UserCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
-                    if (user.role == 'admin')
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          'Admin',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ),
+                    _RoleBadge(role: user.role),
                   ],
                 ),
                 const SizedBox(height: 2),

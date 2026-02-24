@@ -8,6 +8,7 @@ import '../../core/theme/theme_controller.dart';
 import '../../features/admin_users/data/datasources/user_management_firestore_data_source.dart';
 import '../../features/admin_users/data/repositories/user_management_repository_impl.dart';
 import '../../features/admin_users/domain/repositories/user_management_repository.dart';
+import '../../features/admin_users/domain/usecases/create_staff_user.dart';
 import '../../features/admin_users/domain/usecases/observe_managed_users.dart';
 import '../../features/admin_users/domain/usecases/update_user_access.dart';
 import '../../features/admin_users/presentation/controllers/user_management_controller.dart';
@@ -139,11 +140,18 @@ Future<void> setupDependencies() async {
       );
     }
 
+    if (!getIt.isRegistered<CreateStaffUser>()) {
+      getIt.registerLazySingleton<CreateStaffUser>(
+        () => CreateStaffUser(getIt<UserManagementRepository>()),
+      );
+    }
+
     if (!getIt.isRegistered<UserManagementController>()) {
       getIt.registerFactory<UserManagementController>(
         () => UserManagementController(
           observeManagedUsers: getIt<ObserveManagedUsers>(),
           updateUserAccess: getIt<UpdateUserAccess>(),
+          createStaffUser: getIt<CreateStaffUser>(),
         ),
       );
     }
