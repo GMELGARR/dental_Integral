@@ -197,6 +197,19 @@ class HomePage extends StatelessWidget {
                   const SizedBox(height: AppSpacing.md),
                 ],
                 if (authSession.isAdmin ||
+                    authSession.hasModule(ModulePermission.odontologists)) ...[
+                  ModuleCard(
+                    icon: Icons.medical_services_rounded,
+                    title: 'Odontólogos',
+                    subtitle: 'Registro profesional y vinculación',
+                    iconGradient: const LinearGradient(
+                      colors: [Color(0xFF00897B), Color(0xFF4DB6AC)],
+                    ),
+                    onTap: () => context.push('/odontologists'),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+                if (authSession.isAdmin ||
                     authSession.hasModule(ModulePermission.appointments)) ...[
                   ModuleCard(
                     icon: Icons.event_available_rounded,

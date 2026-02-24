@@ -1,6 +1,7 @@
 enum ModulePermission {
   dashboard,
   patients,
+  odontologists,
   appointments,
   billing,
   inventory,
@@ -14,6 +15,8 @@ extension ModulePermissionX on ModulePermission {
         return 'dashboard';
       case ModulePermission.patients:
         return 'patients';
+      case ModulePermission.odontologists:
+        return 'odontologists';
       case ModulePermission.appointments:
         return 'appointments';
       case ModulePermission.billing:
@@ -31,6 +34,8 @@ extension ModulePermissionX on ModulePermission {
         return 'Dashboard';
       case ModulePermission.patients:
         return 'Pacientes';
+      case ModulePermission.odontologists:
+        return 'Odontólogos';
       case ModulePermission.appointments:
         return 'Citas';
       case ModulePermission.billing:

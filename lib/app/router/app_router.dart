@@ -10,6 +10,7 @@ import '../../features/auth/presentation/pages/firebase_unavailable_page.dart';
 import '../../features/auth/presentation/pages/forgot_password_page.dart';
 import '../../features/auth/presentation/pages/inactive_account_page.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
+import '../../features/odontologists/presentation/pages/odontologist_management_page.dart';
 import '../../features/patients/presentation/pages/patients_page.dart';
 import '../di/service_locator.dart';
 import '../../features/home/presentation/pages/home_page.dart';
@@ -60,6 +61,11 @@ class AppRouter {
         builder: (context, state) => const AdminUserManagementPage(),
       ),
       GoRoute(
+        path: '/odontologists',
+        name: 'odontologists',
+        builder: (context, state) => const OdontologistManagementPage(),
+      ),
+      GoRoute(
         path: '/patients',
         name: 'patients',
         builder: (context, state) => const PatientsPage(),
@@ -93,6 +99,12 @@ class AppRouter {
       final canAccessPatients =
           _authSession.isAdmin || _authSession.hasModule(ModulePermission.patients);
       if (location.startsWith('/patients') && !canAccessPatients) {
+        return '/';
+      }
+
+      final canAccessOdontologists =
+          _authSession.isAdmin || _authSession.hasModule(ModulePermission.odontologists);
+      if (location.startsWith('/odontologists') && !canAccessOdontologists) {
         return '/';
       }
 

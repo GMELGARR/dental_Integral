@@ -17,11 +17,13 @@ class UserManagementRepositoryImpl implements UserManagementRepository {
   Future<void> updateUserAccess({
     required String uid,
     required bool active,
+    required String role,
     required List<ModulePermission> modules,
   }) {
     return _dataSource.updateUserAccess(
       uid: uid,
       active: active,
+      role: role,
       modules: modules,
     );
   }

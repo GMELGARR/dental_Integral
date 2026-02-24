@@ -44,6 +44,7 @@ class UserManagementController extends ChangeNotifier {
   Future<bool> updateAccess({
     required String uid,
     required bool active,
+    required String role,
     required List<ModulePermission> modules,
   }) async {
     _errorMessage = null;
@@ -54,6 +55,7 @@ class UserManagementController extends ChangeNotifier {
       await _updateUserAccess(
         uid: uid,
         active: active,
+        role: role,
         modules: modules,
       );
       return true;

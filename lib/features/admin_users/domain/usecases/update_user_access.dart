@@ -9,11 +9,13 @@ class UpdateUserAccess {
   Future<void> call({
     required String uid,
     required bool active,
+    required String role,
     required List<ModulePermission> modules,
   }) {
     return _repository.updateUserAccess(
       uid: uid,
       active: active,
+      role: role,
       modules: modules,
     );
   }

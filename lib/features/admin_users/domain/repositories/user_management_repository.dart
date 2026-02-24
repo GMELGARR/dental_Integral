@@ -7,6 +7,7 @@ abstract class UserManagementRepository {
   Future<void> updateUserAccess({
     required String uid,
     required bool active,
+    required String role,
     required List<ModulePermission> modules,
   });
 

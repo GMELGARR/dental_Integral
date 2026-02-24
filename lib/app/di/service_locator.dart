@@ -12,6 +12,14 @@ import '../../features/admin_users/domain/usecases/create_staff_user.dart';
 import '../../features/admin_users/domain/usecases/observe_managed_users.dart';
 import '../../features/admin_users/domain/usecases/update_user_access.dart';
 import '../../features/admin_users/presentation/controllers/user_management_controller.dart';
+import '../../features/odontologists/data/datasources/odontologist_firestore_data_source.dart';
+import '../../features/odontologists/data/repositories/odontologist_repository_impl.dart';
+import '../../features/odontologists/domain/repositories/odontologist_repository.dart';
+import '../../features/odontologists/domain/usecases/create_odontologist.dart';
+import '../../features/odontologists/domain/usecases/link_odontologist_user.dart';
+import '../../features/odontologists/domain/usecases/observe_odontologists.dart';
+import '../../features/odontologists/domain/usecases/update_odontologist.dart';
+import '../../features/odontologists/presentation/controllers/odontologist_controller.dart';
 import '../../features/auth/data/datasources/firebase_auth_data_source.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
@@ -152,6 +160,54 @@ Future<void> setupDependencies() async {
           observeManagedUsers: getIt<ObserveManagedUsers>(),
           updateUserAccess: getIt<UpdateUserAccess>(),
           createStaffUser: getIt<CreateStaffUser>(),
+        ),
+      );
+    }
+
+    // ── Odontologists ──────────────────────────────────────────
+    if (!getIt.isRegistered<OdontologistFirestoreDataSource>()) {
+      getIt.registerLazySingleton<OdontologistFirestoreDataSource>(
+        () => OdontologistFirestoreDataSource(getIt<FirebaseFirestore>()),
+      );
+    }
+
+    if (!getIt.isRegistered<OdontologistRepository>()) {
+      getIt.registerLazySingleton<OdontologistRepository>(
+        () => OdontologistRepositoryImpl(getIt<OdontologistFirestoreDataSource>()),
+      );
+    }
+
+    if (!getIt.isRegistered<ObserveOdontologists>()) {
+      getIt.registerLazySingleton<ObserveOdontologists>(
+        () => ObserveOdontologists(getIt<OdontologistRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<CreateOdontologist>()) {
+      getIt.registerLazySingleton<CreateOdontologist>(
+        () => CreateOdontologist(getIt<OdontologistRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<UpdateOdontologist>()) {
+      getIt.registerLazySingleton<UpdateOdontologist>(
+        () => UpdateOdontologist(getIt<OdontologistRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<LinkOdontologistUser>()) {
+      getIt.registerLazySingleton<LinkOdontologistUser>(
+        () => LinkOdontologistUser(getIt<OdontologistRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<OdontologistController>()) {
+      getIt.registerFactory<OdontologistController>(
+        () => OdontologistController(
+          observeOdontologists: getIt<ObserveOdontologists>(),
+          createOdontologist: getIt<CreateOdontologist>(),
+          updateOdontologist: getIt<UpdateOdontologist>(),
+          linkOdontologistUser: getIt<LinkOdontologistUser>(),
         ),
       );
     }

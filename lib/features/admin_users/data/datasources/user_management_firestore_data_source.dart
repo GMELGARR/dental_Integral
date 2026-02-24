@@ -40,11 +40,13 @@ class UserManagementFirestoreDataSource {
   Future<void> updateUserAccess({
     required String uid,
     required bool active,
+    required String role,
     required List<ModulePermission> modules,
   }) async {
     try {
       await _firestore.collection('users').doc(uid).update({
         'active': active,
+        'role': role,
         'modules': modules.map((module) => module.key).toList(),
         'updatedAt': FieldValue.serverTimestamp(),
       });

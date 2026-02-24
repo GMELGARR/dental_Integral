@@ -35,8 +35,15 @@ class _AdminUserManagementPageState extends State<AdminUserManagementPage> {
   }
 
   // ── Edit user bottom sheet ─────────────────────────────────────
+  static const _editRoles = {
+    'admin': 'Admin',
+    'staff': 'Staff',
+    'odontologo': 'Odontólogo',
+  };
+
   Future<void> _editUser(ManagedUser user) async {
     var active = user.active;
+    var selectedRole = user.role;
     final selectedModules = {...user.modules};
 
     final confirmed = await showModalBottomSheet<bool>(
@@ -89,6 +96,31 @@ class _AdminUserManagementPageState extends State<AdminUserManagementPage> {
                     const SizedBox(height: AppSpacing.xl),
                     const Divider(),
                     const SizedBox(height: AppSpacing.lg),
+
+                    // ── Role selector ────────────────────────
+                    Text(
+                      'Rol',
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedRole,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.shield_outlined),
+                      ),
+                      items: _editRoles.entries
+                          .map(
+                            (e) => DropdownMenuItem(
+                              value: e.key,
+                              child: Text(e.value),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) {
+                        if (v != null) setModalState(() => selectedRole = v);
+                      },
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
 
                     // ── Active toggle ────────────────────────
                     Container(
@@ -189,6 +221,7 @@ class _AdminUserManagementPageState extends State<AdminUserManagementPage> {
     final success = await _controller.updateAccess(
       uid: user.uid,
       active: active,
+      role: selectedRole,
       modules: selectedModules.toList(),
     );
 
@@ -212,6 +245,8 @@ class _AdminUserManagementPageState extends State<AdminUserManagementPage> {
         return Icons.dashboard_rounded;
       case ModulePermission.patients:
         return Icons.groups_rounded;
+      case ModulePermission.odontologists:
+        return Icons.medical_services_rounded;
       case ModulePermission.appointments:
         return Icons.event_available_rounded;
       case ModulePermission.billing:
