@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/di/service_locator.dart';
+import '../../../../core/theme/theme_mode_button.dart';
 import '../controllers/login_controller.dart';
 
 class LoginPage extends StatefulWidget {
@@ -72,6 +73,9 @@ class _LoginPageState extends State<LoginPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
+      appBar: AppBar(
+        actions: const [ThemeModeButton()],
+      ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(

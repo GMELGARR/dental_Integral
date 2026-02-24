@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/di/service_locator.dart';
+import '../../../../core/theme/theme_mode_button.dart';
 import '../controllers/password_reset_controller.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
@@ -72,6 +73,9 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
+      appBar: AppBar(
+        actions: const [ThemeModeButton()],
+      ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(

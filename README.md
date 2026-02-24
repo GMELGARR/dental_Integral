@@ -32,6 +32,16 @@ Base Flutter con arquitectura modular inicial (Clean + Feature First) para evolu
 - Flujo sin costo: altas de usuarios por script local de administrador
 - Asignación de módulos en Firestore al momento de crear usuario
 
+## Sprint 3A implementado (Gestión de usuarios y permisos)
+
+- Lectura dinámica de estado y módulos desde `users/{uid}` en Firestore
+- Guards de navegación por estado activo/inactivo
+- Guards por permisos de página (ejemplo: `patients`)
+- Pantalla de gestión de usuarios para admin:
+	- listado de usuarios
+	- activar/inactivar usuario
+	- editar módulos/permisos
+
 ## Modo sin costo (recomendado)
 
 La app mantiene autenticación y permisos sin desplegar Cloud Functions.
@@ -57,6 +67,17 @@ Este script:
 - Asigna claim `role=staff`
 - Guarda perfil y módulos en colección `users`
 - Registra auditoría en `audit_logs`
+
+### Promover usuario a admin o cambiar permisos
+
+Script local:
+
+`node set_user_role.js --serviceAccount=./serviceAccount.json --email=user@dominio.com --role=admin --active=true --modules=dashboard,patients,appointments,billing,inventory,reports`
+
+Notas:
+
+- El acceso a gestión de usuarios en la app depende de claim `role=admin`.
+- Si cambias el rol, cierra sesión y vuelve a iniciar para refrescar token/claims.
 
 ## Backend Firebase (opcional con Blaze)
 

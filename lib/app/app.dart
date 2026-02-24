@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_theme.dart';
+import '../core/theme/theme_controller.dart';
 import 'di/service_locator.dart';
 import 'router/app_router.dart';
 
@@ -9,20 +11,20 @@ class DentalIntegralApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final router = getIt<AppRouter>().router;
+    final themeController = getIt<ThemeController>();
 
-    return MaterialApp.router(
-      title: 'Dental Integral',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: Colors.blue,
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        colorSchemeSeed: Colors.blue,
-      ),
-      routerConfig: router,
+    return AnimatedBuilder(
+      animation: themeController,
+      builder: (context, _) {
+        return MaterialApp.router(
+          title: 'Dental Integral',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
+          themeMode: themeController.themeMode,
+          routerConfig: router,
+        );
+      },
     );
   }
 }

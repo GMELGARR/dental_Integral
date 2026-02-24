@@ -1,8 +1,16 @@
 import 'package:get_it/get_it.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../core/errors/error_reporter.dart';
 import '../../core/firebase/firebase_initializer.dart';
+import '../../core/theme/theme_controller.dart';
+import '../../features/admin_users/data/datasources/user_management_firestore_data_source.dart';
+import '../../features/admin_users/data/repositories/user_management_repository_impl.dart';
+import '../../features/admin_users/domain/repositories/user_management_repository.dart';
+import '../../features/admin_users/domain/usecases/observe_managed_users.dart';
+import '../../features/admin_users/domain/usecases/update_user_access.dart';
+import '../../features/admin_users/presentation/controllers/user_management_controller.dart';
 import '../../features/auth/data/datasources/firebase_auth_data_source.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
@@ -22,6 +30,11 @@ Future<void> setupDependencies() async {
     getIt.registerLazySingleton<AppErrorReporter>(() => AppErrorReporter.instance);
   }
 
+  if (!getIt.isRegistered<ThemeController>()) {
+    final themeController = await ThemeController.create();
+    getIt.registerSingleton<ThemeController>(themeController);
+  }
+
   if (!getIt.isRegistered<FirebaseInitializer>()) {
     getIt.registerLazySingleton<FirebaseInitializer>(FirebaseInitializer.new);
   }
@@ -38,9 +51,16 @@ Future<void> setupDependencies() async {
       getIt.registerLazySingleton<FirebaseAuth>(() => FirebaseAuth.instance);
     }
 
+    if (!getIt.isRegistered<FirebaseFirestore>()) {
+      getIt.registerLazySingleton<FirebaseFirestore>(() => FirebaseFirestore.instance);
+    }
+
     if (!getIt.isRegistered<FirebaseAuthDataSource>()) {
       getIt.registerLazySingleton<FirebaseAuthDataSource>(
-        () => FirebaseAuthDataSource(getIt<FirebaseAuth>()),
+        () => FirebaseAuthDataSource(
+          getIt<FirebaseAuth>(),
+          getIt<FirebaseFirestore>(),
+        ),
       );
     }
 
@@ -92,6 +112,39 @@ Future<void> setupDependencies() async {
     if (!getIt.isRegistered<PasswordResetController>()) {
       getIt.registerFactory<PasswordResetController>(
         () => PasswordResetController(getIt<SendPasswordResetEmail>()),
+      );
+    }
+
+    if (!getIt.isRegistered<UserManagementFirestoreDataSource>()) {
+      getIt.registerLazySingleton<UserManagementFirestoreDataSource>(
+        () => UserManagementFirestoreDataSource(getIt<FirebaseFirestore>()),
+      );
+    }
+
+    if (!getIt.isRegistered<UserManagementRepository>()) {
+      getIt.registerLazySingleton<UserManagementRepository>(
+        () => UserManagementRepositoryImpl(getIt<UserManagementFirestoreDataSource>()),
+      );
+    }
+
+    if (!getIt.isRegistered<ObserveManagedUsers>()) {
+      getIt.registerLazySingleton<ObserveManagedUsers>(
+        () => ObserveManagedUsers(getIt<UserManagementRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<UpdateUserAccess>()) {
+      getIt.registerLazySingleton<UpdateUserAccess>(
+        () => UpdateUserAccess(getIt<UserManagementRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<UserManagementController>()) {
+      getIt.registerFactory<UserManagementController>(
+        () => UserManagementController(
+          observeManagedUsers: getIt<ObserveManagedUsers>(),
+          updateUserAccess: getIt<UpdateUserAccess>(),
+        ),
       );
     }
   } else {

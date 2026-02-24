@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/di/service_locator.dart';
+import '../../../../core/theme/theme_mode_button.dart';
+import '../../../admin_users/domain/entities/module_permission.dart';
 import '../../../auth/presentation/controllers/auth_session_controller.dart';
 
 class HomePage extends StatelessWidget {
@@ -17,9 +19,19 @@ class HomePage extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Inicio'),
         actions: [
+          const ThemeModeButton(),
           IconButton(
             onPressed: () async {
-              await authSession.signOut();
+              final success = await authSession.signOut();
+              if (!context.mounted) {
+                return;
+              }
+              if (!success) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('No se pudo cerrar sesión. Intenta de nuevo.')),
+                );
+              }
+              context.go('/login');
             },
             tooltip: 'Cerrar sesión',
             icon: const Icon(Icons.logout),
@@ -91,8 +103,17 @@ class HomePage extends StatelessWidget {
                             onPressed: () => context.push('/admin/users'),
                             icon: const Icon(Icons.admin_panel_settings_outlined),
                             label: const Text('Administrar usuarios'),
-                          )
-                        else
+                          ),
+                        if (authSession.isAdmin || authSession.hasModule(ModulePermission.patients)) ...[
+                          const SizedBox(height: 10),
+                          OutlinedButton.icon(
+                            onPressed: () => context.push('/patients'),
+                            icon: const Icon(Icons.groups_outlined),
+                            label: const Text('Módulo Pacientes'),
+                          ),
+                        ],
+                        if (!authSession.isAdmin &&
+                            !authSession.hasModule(ModulePermission.patients))
                           Text(
                             'Tu cuenta está activa. Los módulos disponibles se mostrarán aquí según tus permisos.',
                             style: theme.textTheme.bodyMedium,

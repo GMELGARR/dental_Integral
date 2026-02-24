@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../../admin_users/domain/entities/module_permission.dart';
 import '../../../auth/domain/entities/auth_user.dart';
 import '../../../auth/domain/usecases/observe_auth_state.dart';
 import '../../../auth/domain/usecases/sign_out.dart';
@@ -32,13 +33,27 @@ class AuthSessionController extends ChangeNotifier {
   bool get isInitialized => _isInitialized;
   bool get isAuthenticated => _currentUser != null;
   bool get isAdmin => _currentUser?.isAdmin ?? false;
+  bool get isActive => _currentUser?.active ?? false;
   AuthUser? get currentUser => _currentUser;
 
-  Future<void> signOut() async {
+  bool hasModule(ModulePermission module) {
+    return _currentUser?.hasModule(module) ?? false;
+  }
+
+  Future<bool> signOut() async {
     if (_signOut == null) {
-      return;
+      return false;
     }
-    await _signOut.call();
+
+    _currentUser = null;
+    notifyListeners();
+
+    try {
+      await _signOut.call();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   @override

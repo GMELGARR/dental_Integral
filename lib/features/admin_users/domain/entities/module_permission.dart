@@ -42,3 +42,12 @@ extension ModulePermissionX on ModulePermission {
     }
   }
 }
+
+ModulePermission? modulePermissionFromKey(String key) {
+  for (final permission in ModulePermission.values) {
+    if (permission.key == key) {
+      return permission;
+    }
+  }
+  return null;
+}

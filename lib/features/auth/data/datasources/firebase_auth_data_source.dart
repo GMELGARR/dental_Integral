@@ -1,27 +1,47 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../core/errors/app_exception.dart';
+import '../../../admin_users/domain/entities/module_permission.dart';
 import '../../domain/entities/auth_user.dart';
 
 class FirebaseAuthDataSource {
-  FirebaseAuthDataSource(this._firebaseAuth);
+  FirebaseAuthDataSource(this._firebaseAuth, this._firestore);
 
   final FirebaseAuth _firebaseAuth;
+  final FirebaseFirestore _firestore;
 
   Stream<AuthUser?> observeAuthState() {
-    return _firebaseAuth.authStateChanges().asyncMap((firebaseUser) async {
+    return _firebaseAuth.authStateChanges().asyncExpand((firebaseUser) {
       if (firebaseUser == null) {
-        return null;
+        return Stream<AuthUser?>.value(null);
       }
 
-      final idTokenResult = await firebaseUser.getIdTokenResult();
-      final role = idTokenResult.claims?['role'] as String?;
+      final userDocStream = _firestore.collection('users').doc(firebaseUser.uid).snapshots();
 
-      return AuthUser(
-        id: firebaseUser.uid,
-        email: firebaseUser.email,
-        isAdmin: role == 'admin',
-      );
+      return userDocStream.asyncMap((userDoc) async {
+        final idTokenResult = await firebaseUser.getIdTokenResult(true);
+        final role = idTokenResult.claims?['role'] as String?;
+
+        final userData = userDoc.data();
+        final active = (userData?['active'] as bool?) ?? true;
+        final modulesRaw = (userData?['modules'] as List<dynamic>? ?? <dynamic>[])
+            .map((entry) => entry.toString())
+            .toList();
+
+        final modules = modulesRaw
+            .map(modulePermissionFromKey)
+            .whereType<ModulePermission>()
+            .toList(growable: false);
+
+        return AuthUser(
+          id: firebaseUser.uid,
+          email: firebaseUser.email,
+          isAdmin: role == 'admin',
+          active: active,
+          modules: modules,
+        );
+      });
     });
   }
 

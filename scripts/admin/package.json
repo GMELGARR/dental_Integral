@@ -5,7 +5,8 @@
   "description": "Admin local scripts for Dental Integral without Cloud Functions",
   "type": "commonjs",
   "scripts": {
-    "create:staff": "node create_staff_user.js"
+    "create:staff": "node create_staff_user.js",
+    "set:role": "node set_user_role.js"
   },
   "dependencies": {
     "firebase-admin": "^13.5.0"
