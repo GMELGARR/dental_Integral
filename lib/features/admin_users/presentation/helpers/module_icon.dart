@@ -10,6 +10,8 @@ IconData moduleIcon(ModulePermission p) {
       return Icons.groups_rounded;
     case ModulePermission.odontologists:
       return Icons.medical_services_rounded;
+    case ModulePermission.treatments:
+      return Icons.healing_rounded;
     case ModulePermission.appointments:
       return Icons.event_available_rounded;
     case ModulePermission.billing:

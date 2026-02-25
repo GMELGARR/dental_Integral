@@ -210,6 +210,19 @@ class HomePage extends StatelessWidget {
                   const SizedBox(height: AppSpacing.md),
                 ],
                 if (authSession.isAdmin ||
+                    authSession.hasModule(ModulePermission.treatments)) ...[
+                  ModuleCard(
+                    icon: Icons.healing_rounded,
+                    title: 'Tratamientos',
+                    subtitle: 'Catálogo de servicios y montos',
+                    iconGradient: const LinearGradient(
+                      colors: [Color(0xFF7C4DFF), Color(0xFFB388FF)],
+                    ),
+                    onTap: () => context.push('/treatments'),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+                if (authSession.isAdmin ||
                     authSession.hasModule(ModulePermission.appointments)) ...[
                   ModuleCard(
                     icon: Icons.event_available_rounded,
@@ -256,13 +269,7 @@ class HomePage extends StatelessWidget {
                     iconGradient: const LinearGradient(
                       colors: [Color(0xFFF4511E), Color(0xFFFF8A65)],
                     ),
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Módulo en desarrollo.'),
-                        ),
-                      );
-                    },
+                    onTap: () => context.push('/inventory'),
                   ),
                   const SizedBox(height: AppSpacing.md),
                 ],
@@ -289,6 +296,7 @@ class HomePage extends StatelessWidget {
                 // No modules message
                 if (!authSession.isAdmin &&
                     !authSession.hasModule(ModulePermission.patients) &&
+                    !authSession.hasModule(ModulePermission.treatments) &&
                     !authSession.hasModule(ModulePermission.appointments) &&
                     !authSession.hasModule(ModulePermission.billing) &&
                     !authSession.hasModule(ModulePermission.inventory) &&

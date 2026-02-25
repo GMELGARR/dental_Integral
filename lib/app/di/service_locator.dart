@@ -20,6 +20,21 @@ import '../../features/odontologists/domain/usecases/link_odontologist_user.dart
 import '../../features/odontologists/domain/usecases/observe_odontologists.dart';
 import '../../features/odontologists/domain/usecases/update_odontologist.dart';
 import '../../features/odontologists/presentation/controllers/odontologist_controller.dart';
+import '../../features/treatments/data/datasources/treatment_firestore_data_source.dart';
+import '../../features/treatments/data/repositories/treatment_repository_impl.dart';
+import '../../features/treatments/domain/repositories/treatment_repository.dart';
+import '../../features/treatments/domain/usecases/create_treatment.dart';
+import '../../features/treatments/domain/usecases/observe_treatments.dart';
+import '../../features/treatments/domain/usecases/update_treatment.dart';
+import '../../features/treatments/presentation/controllers/treatment_controller.dart';
+import '../../features/inventory/data/datasources/inventory_firestore_data_source.dart';
+import '../../features/inventory/data/repositories/inventory_repository_impl.dart';
+import '../../features/inventory/domain/repositories/inventory_repository.dart';
+import '../../features/inventory/domain/usecases/adjust_stock.dart';
+import '../../features/inventory/domain/usecases/create_inventory_item.dart';
+import '../../features/inventory/domain/usecases/observe_inventory.dart';
+import '../../features/inventory/domain/usecases/update_inventory_item.dart';
+import '../../features/inventory/presentation/controllers/inventory_controller.dart';
 import '../../features/auth/data/datasources/firebase_auth_data_source.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
@@ -208,6 +223,95 @@ Future<void> setupDependencies() async {
           createOdontologist: getIt<CreateOdontologist>(),
           updateOdontologist: getIt<UpdateOdontologist>(),
           linkOdontologistUser: getIt<LinkOdontologistUser>(),
+        ),
+      );
+    }
+
+    // ── Treatments ─────────────────────────────────────────────
+    if (!getIt.isRegistered<TreatmentFirestoreDataSource>()) {
+      getIt.registerLazySingleton<TreatmentFirestoreDataSource>(
+        () => TreatmentFirestoreDataSource(getIt<FirebaseFirestore>()),
+      );
+    }
+
+    if (!getIt.isRegistered<TreatmentRepository>()) {
+      getIt.registerLazySingleton<TreatmentRepository>(
+        () => TreatmentRepositoryImpl(getIt<TreatmentFirestoreDataSource>()),
+      );
+    }
+
+    if (!getIt.isRegistered<ObserveTreatments>()) {
+      getIt.registerLazySingleton<ObserveTreatments>(
+        () => ObserveTreatments(getIt<TreatmentRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<CreateTreatment>()) {
+      getIt.registerLazySingleton<CreateTreatment>(
+        () => CreateTreatment(getIt<TreatmentRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<UpdateTreatment>()) {
+      getIt.registerLazySingleton<UpdateTreatment>(
+        () => UpdateTreatment(getIt<TreatmentRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<TreatmentController>()) {
+      getIt.registerFactory<TreatmentController>(
+        () => TreatmentController(
+          observeTreatments: getIt<ObserveTreatments>(),
+          createTreatment: getIt<CreateTreatment>(),
+          updateTreatment: getIt<UpdateTreatment>(),
+        ),
+      );
+    }
+
+    // ── Inventory ──────────────────────────────────────────────
+    if (!getIt.isRegistered<InventoryFirestoreDataSource>()) {
+      getIt.registerLazySingleton<InventoryFirestoreDataSource>(
+        () => InventoryFirestoreDataSource(getIt<FirebaseFirestore>()),
+      );
+    }
+
+    if (!getIt.isRegistered<InventoryRepository>()) {
+      getIt.registerLazySingleton<InventoryRepository>(
+        () => InventoryRepositoryImpl(getIt<InventoryFirestoreDataSource>()),
+      );
+    }
+
+    if (!getIt.isRegistered<ObserveInventory>()) {
+      getIt.registerLazySingleton<ObserveInventory>(
+        () => ObserveInventory(getIt<InventoryRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<CreateInventoryItem>()) {
+      getIt.registerLazySingleton<CreateInventoryItem>(
+        () => CreateInventoryItem(getIt<InventoryRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<UpdateInventoryItem>()) {
+      getIt.registerLazySingleton<UpdateInventoryItem>(
+        () => UpdateInventoryItem(getIt<InventoryRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<AdjustStock>()) {
+      getIt.registerLazySingleton<AdjustStock>(
+        () => AdjustStock(getIt<InventoryRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<InventoryController>()) {
+      getIt.registerFactory<InventoryController>(
+        () => InventoryController(
+          observeInventory: getIt<ObserveInventory>(),
+          createInventoryItem: getIt<CreateInventoryItem>(),
+          updateInventoryItem: getIt<UpdateInventoryItem>(),
+          adjustStock: getIt<AdjustStock>(),
         ),
       );
     }

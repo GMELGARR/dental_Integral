@@ -11,6 +11,8 @@ import '../../features/auth/presentation/pages/forgot_password_page.dart';
 import '../../features/auth/presentation/pages/inactive_account_page.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/odontologists/presentation/pages/odontologist_management_page.dart';
+import '../../features/treatments/presentation/pages/treatment_management_page.dart';
+import '../../features/inventory/presentation/pages/inventory_management_page.dart';
 import '../../features/patients/presentation/pages/patients_page.dart';
 import '../di/service_locator.dart';
 import '../../features/home/presentation/pages/home_page.dart';
@@ -66,6 +68,16 @@ class AppRouter {
         builder: (context, state) => const OdontologistManagementPage(),
       ),
       GoRoute(
+        path: '/treatments',
+        name: 'treatments',
+        builder: (context, state) => const TreatmentManagementPage(),
+      ),
+      GoRoute(
+        path: '/inventory',
+        name: 'inventory',
+        builder: (context, state) => const InventoryManagementPage(),
+      ),
+      GoRoute(
         path: '/patients',
         name: 'patients',
         builder: (context, state) => const PatientsPage(),
@@ -105,6 +117,18 @@ class AppRouter {
       final canAccessOdontologists =
           _authSession.isAdmin || _authSession.hasModule(ModulePermission.odontologists);
       if (location.startsWith('/odontologists') && !canAccessOdontologists) {
+        return '/';
+      }
+
+      final canAccessTreatments =
+          _authSession.isAdmin || _authSession.hasModule(ModulePermission.treatments);
+      if (location.startsWith('/treatments') && !canAccessTreatments) {
+        return '/';
+      }
+
+      final canAccessInventory =
+          _authSession.isAdmin || _authSession.hasModule(ModulePermission.inventory);
+      if (location.startsWith('/inventory') && !canAccessInventory) {
         return '/';
       }
 
