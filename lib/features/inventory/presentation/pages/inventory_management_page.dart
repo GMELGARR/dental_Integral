@@ -21,25 +21,37 @@ class InventoryManagementPage extends StatefulWidget {
 
 class _InventoryManagementPageState extends State<InventoryManagementPage> {
   late final InventoryController _controller;
+  final _searchCtrl = TextEditingController();
   String? _selectedCategory;
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _controller = getIt<InventoryController>();
+    _searchCtrl.addListener(() {
+      setState(() => _searchQuery = _searchCtrl.text.trim().toLowerCase());
+    });
   }
 
   @override
   void dispose() {
+    _searchCtrl.dispose();
     _controller.dispose();
     super.dispose();
   }
 
   List<InventoryItem> get _filteredItems {
-    if (_selectedCategory == null) return _controller.items;
-    return _controller.items
-        .where((i) => i.categoria == _selectedCategory)
-        .toList();
+    var list = _controller.items;
+    if (_selectedCategory != null) {
+      list = list.where((i) => i.categoria == _selectedCategory).toList();
+    }
+    if (_searchQuery.isNotEmpty) {
+      list = list
+          .where((i) => i.nombre.toLowerCase().contains(_searchQuery))
+          .toList();
+    }
+    return list;
   }
 
   // ── Create ─────────────────────────────────────────────────────
@@ -255,6 +267,36 @@ class _InventoryManagementPageState extends State<InventoryManagementPage> {
                 ),
               ),
 
+              // ── Search bar ─────────────────────────
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xl,
+                  ),
+                  child: TextField(
+                    controller: _searchCtrl,
+                    decoration: InputDecoration(
+                      hintText: 'Buscar producto...',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.close_rounded),
+                              onPressed: () => _searchCtrl.clear(),
+                            )
+                          : null,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: AppSpacing.md,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SliverToBoxAdapter(
+                child: SizedBox(height: AppSpacing.md),
+              ),
+
               // ── Content ────────────────────────────
               if (_controller.isLoading)
                 const SliverFillRemaining(
@@ -274,9 +316,11 @@ class _InventoryManagementPageState extends State<InventoryManagementPage> {
                         ),
                         const SizedBox(height: AppSpacing.md),
                         Text(
-                          _selectedCategory != null
-                              ? 'Sin productos en esta categoría.'
-                              : 'Sin productos registrados.',
+                          _searchQuery.isNotEmpty
+                              ? 'Sin resultados para "${_searchCtrl.text.trim()}".'
+                              : _selectedCategory != null
+                                  ? 'Sin productos en esta categoría.'
+                                  : 'Sin productos registrados.',
                           style: theme.textTheme.bodyLarge,
                         ),
                         const SizedBox(height: AppSpacing.xs),
