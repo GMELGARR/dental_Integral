@@ -16,11 +16,14 @@ class ClinicalRecordFirestoreDataSource {
   Stream<List<ClinicalRecord>> observeByPatient(String pacienteId) {
     return _col
         .where('pacienteId', isEqualTo: pacienteId)
-        .orderBy('fecha', descending: true)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => ClinicalRecord.fromFirestore(d.id, d.data()))
-            .toList());
+        .map((snap) {
+      final list = snap.docs
+          .map((d) => ClinicalRecord.fromFirestore(d.id, d.data()))
+          .toList()
+        ..sort((a, b) => b.fecha.compareTo(a.fecha)); // newest first
+      return list;
+    });
   }
 
   /// One-shot fetch by citaId.
