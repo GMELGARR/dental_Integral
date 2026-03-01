@@ -14,6 +14,13 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
       _ds.observeByDateRange(start, end);
 
   @override
+  Future<List<Appointment>> getByOdontologoAndDate(
+    String odontologoId,
+    DateTime date,
+  ) =>
+      _ds.getByOdontologoAndDate(odontologoId, date);
+
+  @override
   Future<void> create({
     required String tipo,
     required DateTime fecha,
@@ -22,6 +29,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
     required String odontologoNombre,
     required String pacienteNombre,
     required String pacienteTelefono,
+    int duracionMinutos = 30,
     String? pacienteId,
     String? nombreTemporal,
     String? telefonoTemporal,
@@ -37,6 +45,7 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
         odontologoNombre: odontologoNombre,
         pacienteNombre: pacienteNombre,
         pacienteTelefono: pacienteTelefono,
+        duracionMinutos: duracionMinutos,
         pacienteId: pacienteId,
         nombreTemporal: nombreTemporal,
         telefonoTemporal: telefonoTemporal,

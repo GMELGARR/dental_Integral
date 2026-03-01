@@ -11,6 +11,8 @@ class Odontologist {
     required this.activo,
     this.userId,
     this.notas,
+    this.horaInicio = '08:00',
+    this.horaFin = '17:00',
   });
 
   final String id;
@@ -24,4 +26,10 @@ class Odontologist {
   /// Firebase Auth UID — `null` if the odontologist has no system account.
   final String? userId;
   final String? notas;
+
+  /// Work schedule start time (HH:mm). Default 08:00.
+  final String horaInicio;
+
+  /// Work schedule end time (HH:mm). Default 17:00.
+  final String horaFin;
 }

@@ -15,6 +15,8 @@ class UpdateOdontologist {
     required String email,
     required bool activo,
     String? notas,
+    String? horaInicio,
+    String? horaFin,
   }) {
     return _repository.update(
       id: id,
@@ -25,6 +27,8 @@ class UpdateOdontologist {
       email: email,
       activo: activo,
       notas: notas,
+      horaInicio: horaInicio,
+      horaFin: horaFin,
     );
   }
 }

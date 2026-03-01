@@ -408,6 +408,7 @@ Future<void> setupDependencies() async {
           observeAppointments: getIt<ObserveAppointments>(),
           createAppointment: getIt<CreateAppointment>(),
           updateAppointment: getIt<UpdateAppointment>(),
+          repository: getIt<AppointmentRepository>(),
         ),
       );
     }

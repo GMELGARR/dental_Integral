@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../../core/errors/app_exception.dart';
 import '../../domain/entities/appointment.dart';
+import '../../domain/repositories/appointment_repository.dart';
 import '../../domain/usecases/create_appointment.dart';
 import '../../domain/usecases/observe_appointments.dart';
 import '../../domain/usecases/update_appointment.dart';
@@ -13,9 +14,11 @@ class AppointmentController extends ChangeNotifier {
     required ObserveAppointments observeAppointments,
     required CreateAppointment createAppointment,
     required UpdateAppointment updateAppointment,
+    required AppointmentRepository repository,
   })  : _observeAppointments = observeAppointments,
         _createAppointment = createAppointment,
-        _updateAppointment = updateAppointment {
+        _updateAppointment = updateAppointment,
+        _repository = repository {
     // Default: observe today's appointments.
     setDateRange(_selectedDate, _selectedDate);
   }
@@ -23,6 +26,7 @@ class AppointmentController extends ChangeNotifier {
   final ObserveAppointments _observeAppointments;
   final CreateAppointment _createAppointment;
   final UpdateAppointment _updateAppointment;
+  final AppointmentRepository _repository;
 
   StreamSubscription<List<Appointment>>? _subscription;
 
@@ -79,6 +83,7 @@ class AppointmentController extends ChangeNotifier {
     required String odontologoNombre,
     required String pacienteNombre,
     required String pacienteTelefono,
+    int duracionMinutos = 30,
     String? pacienteId,
     String? nombreTemporal,
     String? telefonoTemporal,
@@ -98,6 +103,7 @@ class AppointmentController extends ChangeNotifier {
         odontologoNombre: odontologoNombre,
         pacienteNombre: pacienteNombre,
         pacienteTelefono: pacienteTelefono,
+        duracionMinutos: duracionMinutos,
         pacienteId: pacienteId,
         nombreTemporal: nombreTemporal,
         telefonoTemporal: telefonoTemporal,
@@ -182,6 +188,13 @@ class AppointmentController extends ChangeNotifier {
   /// Appointments for a specific odontologist on the current date.
   List<Appointment> appointmentsFor(String odontologoId) =>
       _appointments.where((a) => a.odontologoId == odontologoId).toList();
+
+  /// One-shot fetch: appointments for a specific odontólogo on a given date.
+  Future<List<Appointment>> getByOdontologoAndDate(
+    String odontologoId,
+    DateTime date,
+  ) =>
+      _repository.getByOdontologoAndDate(odontologoId, date);
 
   @override
   void dispose() {

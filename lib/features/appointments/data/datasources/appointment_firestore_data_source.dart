@@ -32,6 +32,29 @@ class AppointmentFirestoreDataSource {
     });
   }
 
+  /// One-shot fetch of appointments for a specific odontólogo on a date.
+  Future<List<Appointment>> getByOdontologoAndDate(
+    String odontologoId,
+    DateTime date,
+  ) async {
+    final dayStart = DateTime(date.year, date.month, date.day);
+    final dayEnd = DateTime(date.year, date.month, date.day, 23, 59, 59);
+
+    // Query only by fecha range to avoid needing a composite index.
+    // Filter by odontologoId locally.
+    final snap = await _col
+        .where('fecha', isGreaterThanOrEqualTo: Timestamp.fromDate(dayStart))
+        .where('fecha', isLessThanOrEqualTo: Timestamp.fromDate(dayEnd))
+        .get();
+
+    final list = snap.docs
+        .map((d) => Appointment.fromFirestore(d.id, d.data()))
+        .where((a) => a.odontologoId == odontologoId)
+        .toList();
+    list.sort((a, b) => a.hora.compareTo(b.hora));
+    return list;
+  }
+
   Future<void> create({
     required String tipo,
     required DateTime fecha,
@@ -40,6 +63,7 @@ class AppointmentFirestoreDataSource {
     required String odontologoNombre,
     required String pacienteNombre,
     required String pacienteTelefono,
+    int duracionMinutos = 30,
     String? pacienteId,
     String? nombreTemporal,
     String? telefonoTemporal,
@@ -53,6 +77,7 @@ class AppointmentFirestoreDataSource {
         DateTime(fecha.year, fecha.month, fecha.day),
       ),
       'hora': hora,
+      'duracionMinutos': duracionMinutos,
       'estado': AppointmentStatus.programada,
       'odontologoId': odontologoId,
       'odontologoNombre': odontologoNombre,

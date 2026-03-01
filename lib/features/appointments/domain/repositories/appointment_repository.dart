@@ -13,6 +13,7 @@ abstract class AppointmentRepository {
     required String odontologoNombre,
     required String pacienteNombre,
     required String pacienteTelefono,
+    int duracionMinutos = 30,
     String? pacienteId,
     String? nombreTemporal,
     String? telefonoTemporal,
@@ -20,6 +21,12 @@ abstract class AppointmentRepository {
     String? tratamientoId,
     String? notas,
   });
+
+  /// One-shot fetch for a specific odontólogo on a date.
+  Future<List<Appointment>> getByOdontologoAndDate(
+    String odontologoId,
+    DateTime date,
+  );
 
   /// Update an existing appointment (partial).
   Future<void> update({

@@ -57,6 +57,8 @@ class _OdontologistManagementPageState
       telefono: result.telefono,
       email: result.email,
       notas: result.notas,
+      horaInicio: result.horaInicio,
+      horaFin: result.horaFin,
     );
 
     if (!mounted) return;
@@ -92,6 +94,8 @@ class _OdontologistManagementPageState
       email: result.email,
       activo: result.activo,
       notas: result.notas,
+      horaInicio: result.horaInicio,
+      horaFin: result.horaFin,
     );
 
     if (!mounted) return;
@@ -368,6 +372,8 @@ class _OdontologistFormResult {
     required this.email,
     required this.activo,
     this.notas,
+    required this.horaInicio,
+    required this.horaFin,
   });
 
   final String nombre;
@@ -377,6 +383,8 @@ class _OdontologistFormResult {
   final String email;
   final bool activo;
   final String? notas;
+  final String horaInicio;
+  final String horaFin;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -401,8 +409,18 @@ class _OdontologistFormSheetState extends State<_OdontologistFormSheet> {
   late final TextEditingController _notasCtrl;
   late Specialty _specialty;
   late bool _activo;
+  late TimeOfDay _horaInicio;
+  late TimeOfDay _horaFin;
 
   bool get _isEditing => widget.existing != null;
+
+  static TimeOfDay _parseTime(String hhmm) {
+    final parts = hhmm.split(':');
+    return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+  }
+
+  static String _formatTime(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   @override
   void initState() {
@@ -415,6 +433,8 @@ class _OdontologistFormSheetState extends State<_OdontologistFormSheet> {
     _notasCtrl = TextEditingController(text: e?.notas ?? '');
     _specialty = e?.especialidad ?? Specialty.general;
     _activo = e?.activo ?? true;
+    _horaInicio = _parseTime(e?.horaInicio ?? '08:00');
+    _horaFin = _parseTime(e?.horaFin ?? '17:00');
   }
 
   @override
@@ -439,6 +459,8 @@ class _OdontologistFormSheetState extends State<_OdontologistFormSheet> {
         email: _emailCtrl.text.trim(),
         activo: _activo,
         notas: _notasCtrl.text.trim().isEmpty ? null : _notasCtrl.text.trim(),
+        horaInicio: _formatTime(_horaInicio),
+        horaFin: _formatTime(_horaFin),
       ),
     );
   }
@@ -590,6 +612,54 @@ class _OdontologistFormSheetState extends State<_OdontologistFormSheet> {
                     if (!email.contains('@')) return 'Email inválido.';
                     return null;
                   },
+                ),
+                const SizedBox(height: AppSpacing.lg),
+
+                // ── Horario de trabajo ──────────────
+                Text('Horario de trabajo', style: theme.textTheme.titleMedium),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final picked = await showTimePicker(
+                            context: context,
+                            initialTime: _horaInicio,
+                          );
+                          if (picked != null) setState(() => _horaInicio = picked);
+                        },
+                        borderRadius: AppSpacing.borderRadiusSm,
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Inicio',
+                            prefixIcon: Icon(Icons.login_rounded),
+                          ),
+                          child: Text(_formatTime(_horaInicio)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final picked = await showTimePicker(
+                            context: context,
+                            initialTime: _horaFin,
+                          );
+                          if (picked != null) setState(() => _horaFin = picked);
+                        },
+                        borderRadius: AppSpacing.borderRadiusSm,
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Fin',
+                            prefixIcon: Icon(Icons.logout_rounded),
+                          ),
+                          child: Text(_formatTime(_horaFin)),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: AppSpacing.lg),
 

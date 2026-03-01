@@ -28,6 +28,8 @@ class OdontologistFirestoreDataSource {
           activo: (d['activo'] as bool?) ?? true,
           userId: d['userId'] as String?,
           notas: d['notas'] as String?,
+          horaInicio: (d['horaInicio'] as String?) ?? '08:00',
+          horaFin: (d['horaFin'] as String?) ?? '17:00',
         );
       }).toList(growable: false);
     });
@@ -40,6 +42,8 @@ class OdontologistFirestoreDataSource {
     required String telefono,
     required String email,
     String? notas,
+    String horaInicio = '08:00',
+    String horaFin = '17:00',
   }) async {
     try {
       await _col.add({
@@ -51,6 +55,8 @@ class OdontologistFirestoreDataSource {
         'activo': true,
         'userId': null,
         'notas': notas ?? '',
+        'horaInicio': horaInicio,
+        'horaFin': horaFin,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -71,9 +77,11 @@ class OdontologistFirestoreDataSource {
     required String email,
     required bool activo,
     String? notas,
+    String? horaInicio,
+    String? horaFin,
   }) async {
     try {
-      await _col.doc(id).update({
+      final data = <String, dynamic>{
         'nombre': nombre,
         'especialidad': especialidad.key,
         'colegiadoActivo': colegiadoActivo,
@@ -82,7 +90,10 @@ class OdontologistFirestoreDataSource {
         'activo': activo,
         'notas': notas ?? '',
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      };
+      if (horaInicio != null) data['horaInicio'] = horaInicio;
+      if (horaFin != null) data['horaFin'] = horaFin;
+      await _col.doc(id).update(data);
     } catch (error) {
       throw AppException(
         'No se pudo actualizar al odontólogo.',

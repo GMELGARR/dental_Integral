@@ -13,6 +13,8 @@ class CreateOdontologist {
     required String telefono,
     required String email,
     String? notas,
+    String horaInicio = '08:00',
+    String horaFin = '17:00',
   }) {
     return _repository.create(
       nombre: nombre,
@@ -21,6 +23,8 @@ class CreateOdontologist {
       telefono: telefono,
       email: email,
       notas: notas,
+      horaInicio: horaInicio,
+      horaFin: horaFin,
     );
   }
 }

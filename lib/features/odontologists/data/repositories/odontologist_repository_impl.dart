@@ -21,6 +21,8 @@ class OdontologistRepositoryImpl implements OdontologistRepository {
     required String telefono,
     required String email,
     String? notas,
+    String horaInicio = '08:00',
+    String horaFin = '17:00',
   }) {
     return _dataSource.create(
       nombre: nombre,
@@ -29,6 +31,8 @@ class OdontologistRepositoryImpl implements OdontologistRepository {
       telefono: telefono,
       email: email,
       notas: notas,
+      horaInicio: horaInicio,
+      horaFin: horaFin,
     );
   }
 
@@ -42,6 +46,8 @@ class OdontologistRepositoryImpl implements OdontologistRepository {
     required String email,
     required bool activo,
     String? notas,
+    String? horaInicio,
+    String? horaFin,
   }) {
     return _dataSource.update(
       id: id,
@@ -52,6 +58,8 @@ class OdontologistRepositoryImpl implements OdontologistRepository {
       email: email,
       activo: activo,
       notas: notas,
+      horaInicio: horaInicio,
+      horaFin: horaFin,
     );
   }
 

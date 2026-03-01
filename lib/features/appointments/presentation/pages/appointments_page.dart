@@ -8,11 +8,13 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/theme_mode_button.dart';
 import '../../../../core/widgets/gradient_header.dart';
+import '../../../odontologists/domain/entities/odontologist.dart';
 import '../../../odontologists/presentation/controllers/odontologist_controller.dart';
 import '../../../patients/domain/entities/patient.dart';
 import '../../../patients/presentation/controllers/patient_controller.dart';
 import '../../domain/entities/appointment.dart';
 import '../controllers/appointment_controller.dart';
+import '../widgets/time_slot_grid.dart';
 
 // ══════════════════════════════════════════════════════════════════
 // MAIN PAGE
@@ -739,15 +741,21 @@ class _AppointmentFormPageState extends State<_AppointmentFormPage> {
   // Controllers for fetching dropdown data
   late final OdontologistController _odontCtrl;
   late final PatientController _patientCtrl;
+  late final AppointmentController _apptCtrl;
 
   // Form state
   String _tipo = AppointmentType.primeraConsulta;
   DateTime _fecha = DateTime.now();
-  TimeOfDay _hora = const TimeOfDay(hour: 9, minute: 0);
+  String? _selectedHora; // from TimeSlotGrid
 
   // Odontólogo
   String? _odontologoId;
   String _odontologoNombre = '';
+  Odontologist? _selectedOdontologist;
+
+  // Time slots
+  List<TimeSlot> _slots = [];
+  bool _loadingSlots = false;
 
   // Patient (reconsulta)
   Patient? _selectedPatient;
@@ -765,6 +773,7 @@ class _AppointmentFormPageState extends State<_AppointmentFormPage> {
     super.initState();
     _odontCtrl = getIt<OdontologistController>();
     _patientCtrl = getIt<PatientController>();
+    _apptCtrl = getIt<AppointmentController>();
   }
 
   @override
@@ -775,6 +784,7 @@ class _AppointmentFormPageState extends State<_AppointmentFormPage> {
     _notasCtrl.dispose();
     _odontCtrl.dispose();
     _patientCtrl.dispose();
+    _apptCtrl.dispose();
     super.dispose();
   }
 
@@ -788,19 +798,43 @@ class _AppointmentFormPageState extends State<_AppointmentFormPage> {
       firstDate: now.subtract(const Duration(days: 1)),
       lastDate: DateTime(now.year + 2),
     );
-    if (picked != null) setState(() => _fecha = picked);
+    if (picked != null) {
+      setState(() => _fecha = picked);
+      _loadTimeSlots();
+    }
   }
 
-  Future<void> _pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _hora,
-    );
-    if (picked != null) setState(() => _hora = picked);
-  }
+  /// Fetches existing appointments and builds the slot grid.
+  Future<void> _loadTimeSlots() async {
+    if (_selectedOdontologist == null) return;
 
-  String _formatTime(TimeOfDay t) =>
-      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+    setState(() {
+      _loadingSlots = true;
+      _selectedHora = null;
+      _slots = [];
+    });
+
+    try {
+      final existing = await _apptCtrl.getByOdontologoAndDate(
+        _selectedOdontologist!.id,
+        _fecha,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _slots = TimeSlotGrid.buildSlots(
+          horaInicio: _selectedOdontologist!.horaInicio,
+          horaFin: _selectedOdontologist!.horaFin,
+          fecha: _fecha,
+          existingAppointments: existing,
+        );
+        _loadingSlots = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingSlots = false);
+    }
+  }
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
@@ -809,6 +843,14 @@ class _AppointmentFormPageState extends State<_AppointmentFormPage> {
     if (_odontologoId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Selecciona un odontólogo.')),
+      );
+      return;
+    }
+
+    // Validate time slot selected
+    if (_selectedHora == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecciona un horario disponible.')),
       );
       return;
     }
@@ -832,7 +874,7 @@ class _AppointmentFormPageState extends State<_AppointmentFormPage> {
       _AppointmentFormResult(
         tipo: _tipo,
         fecha: _fecha,
-        hora: _formatTime(_hora),
+        hora: _selectedHora!,
         odontologoId: _odontologoId!,
         odontologoNombre: _odontologoNombre,
         pacienteNombre: pacienteNombre,
@@ -1092,7 +1134,9 @@ class _AppointmentFormPageState extends State<_AppointmentFormPage> {
                       setState(() {
                         _odontologoId = v;
                         _odontologoNombre = o.nombre;
+                        _selectedOdontologist = o;
                       });
+                      _loadTimeSlots();
                     }
                   },
                   validator: (v) =>
@@ -1103,50 +1147,98 @@ class _AppointmentFormPageState extends State<_AppointmentFormPage> {
             const SizedBox(height: AppSpacing.xxl),
 
             // ════════════════════════════════════
-            // FECHA Y HORA
+            // FECHA Y DISPONIBILIDAD
             // ════════════════════════════════════
             Text(
-              'Fecha y hora',
+              'Fecha y disponibilidad',
               style: theme.textTheme.titleMedium
                   ?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: AppSpacing.md),
 
-            Row(
-              children: [
-                // Date
-                Expanded(
-                  child: InkWell(
-                    onTap: _pickDate,
-                    borderRadius: AppSpacing.borderRadiusSm,
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Fecha',
-                        prefixIcon:
-                            Icon(Icons.calendar_today_rounded),
-                      ),
-                      child: Text(dateText),
-                    ),
+            // Date picker
+            InkWell(
+              onTap: _pickDate,
+              borderRadius: AppSpacing.borderRadiusSm,
+              child: InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Fecha',
+                  prefixIcon: Icon(Icons.calendar_today_rounded),
+                ),
+                child: Text(dateText),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+
+            // Time slot grid or placeholder
+            if (_selectedOdontologist == null)
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                decoration: BoxDecoration(
+                  color: AppColors.info.withValues(alpha: 0.06),
+                  borderRadius: AppSpacing.borderRadiusSm,
+                  border: Border.all(
+                    color: AppColors.info.withValues(alpha: 0.2),
                   ),
                 ),
-                const SizedBox(width: AppSpacing.md),
-                // Time
-                SizedBox(
-                  width: 140,
-                  child: InkWell(
-                    onTap: _pickTime,
-                    borderRadius: AppSpacing.borderRadiusSm,
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Hora',
-                        prefixIcon: Icon(Icons.access_time_rounded),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline_rounded,
+                        size: 18, color: AppColors.info),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        'Selecciona un odontólogo para ver los horarios disponibles.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: AppColors.info,
+                        ),
                       ),
-                      child: Text(_formatTime(_hora)),
                     ),
+                  ],
+                ),
+              )
+            else if (_loadingSlots)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else ...[
+              TimeSlotGrid(
+                slots: _slots,
+                selectedSlot: _selectedHora,
+                onSlotSelected: (hora) =>
+                    setState(() => _selectedHora = hora),
+                odontologoNombre: _odontologoNombre,
+                fechaLabel: dateText,
+              ),
+              if (_selectedHora != null) ...[
+                const SizedBox(height: AppSpacing.md),
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.08),
+                    borderRadius: AppSpacing.borderRadiusSm,
+                    border: Border.all(
+                      color: AppColors.success.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_circle_rounded,
+                          size: 20, color: AppColors.success),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        'Horario seleccionado: $_selectedHora',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: AppColors.success,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
-            ),
+            ],
             const SizedBox(height: AppSpacing.xxl),
 
             // ════════════════════════════════════

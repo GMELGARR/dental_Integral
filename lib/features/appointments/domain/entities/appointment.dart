@@ -78,6 +78,7 @@ class Appointment {
     required this.odontologoNombre,
     required this.pacienteNombre,
     required this.pacienteTelefono,
+    this.duracionMinutos = 30,
     this.pacienteId,
     this.nombreTemporal,
     this.telefonoTemporal,
@@ -96,6 +97,9 @@ class Appointment {
 
   /// Time as "HH:mm" string.
   final String hora;
+
+  /// Duration in minutes. Default 30.
+  final int duracionMinutos;
 
   /// Current status (see [AppointmentStatus]).
   final String estado;
@@ -135,6 +139,7 @@ class Appointment {
       tipo: data['tipo'] as String? ?? AppointmentType.primeraConsulta,
       fecha: (data['fecha'] as dynamic).toDate() as DateTime,
       hora: data['hora'] as String? ?? '',
+      duracionMinutos: (data['duracionMinutos'] as int?) ?? 30,
       estado: data['estado'] as String? ?? AppointmentStatus.programada,
       odontologoId: data['odontologoId'] as String? ?? '',
       odontologoNombre: data['odontologoNombre'] as String? ?? '',

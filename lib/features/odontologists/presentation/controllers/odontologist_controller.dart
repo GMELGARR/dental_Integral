@@ -53,6 +53,8 @@ class OdontologistController extends ChangeNotifier {
     required String telefono,
     required String email,
     String? notas,
+    String horaInicio = '08:00',
+    String horaFin = '17:00',
   }) async {
     _errorMessage = null;
     _isSaving = true;
@@ -66,6 +68,8 @@ class OdontologistController extends ChangeNotifier {
         telefono: telefono,
         email: email,
         notas: notas,
+        horaInicio: horaInicio,
+        horaFin: horaFin,
       );
       return true;
     } on AppException catch (e) {
@@ -89,6 +93,8 @@ class OdontologistController extends ChangeNotifier {
     required String email,
     required bool activo,
     String? notas,
+    String? horaInicio,
+    String? horaFin,
   }) async {
     _errorMessage = null;
     _updatingId = id;
@@ -104,6 +110,8 @@ class OdontologistController extends ChangeNotifier {
         email: email,
         activo: activo,
         notas: notas,
+        horaInicio: horaInicio,
+        horaFin: horaFin,
       );
       return true;
     } on AppException catch (e) {

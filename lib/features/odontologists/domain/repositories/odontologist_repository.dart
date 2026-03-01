@@ -11,6 +11,8 @@ abstract class OdontologistRepository {
     required String telefono,
     required String email,
     String? notas,
+    String horaInicio = '08:00',
+    String horaFin = '17:00',
   });
 
   Future<void> update({
@@ -22,6 +24,8 @@ abstract class OdontologistRepository {
     required String email,
     required bool activo,
     String? notas,
+    String? horaInicio,
+    String? horaFin,
   });
 
   Future<void> linkUser({
