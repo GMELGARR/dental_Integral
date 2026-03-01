@@ -49,6 +49,13 @@ import '../../features/appointments/domain/usecases/create_appointment.dart';
 import '../../features/appointments/domain/usecases/observe_appointments.dart';
 import '../../features/appointments/domain/usecases/update_appointment.dart';
 import '../../features/appointments/presentation/controllers/appointment_controller.dart';
+import '../../features/clinical_records/data/datasources/clinical_record_firestore_data_source.dart';
+import '../../features/clinical_records/data/repositories/clinical_record_repository_impl.dart';
+import '../../features/clinical_records/domain/repositories/clinical_record_repository.dart';
+import '../../features/clinical_records/domain/usecases/create_clinical_record.dart';
+import '../../features/clinical_records/domain/usecases/get_clinical_record_by_appointment.dart';
+import '../../features/clinical_records/domain/usecases/observe_clinical_records_by_patient.dart';
+import '../../features/clinical_records/presentation/controllers/clinical_record_controller.dart';
 import '../../features/auth/data/datasources/firebase_auth_data_source.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
@@ -409,6 +416,47 @@ Future<void> setupDependencies() async {
           createAppointment: getIt<CreateAppointment>(),
           updateAppointment: getIt<UpdateAppointment>(),
           repository: getIt<AppointmentRepository>(),
+        ),
+      );
+    }
+
+    // ── Clinical Records ───────────────────────────────────────────
+    if (!getIt.isRegistered<ClinicalRecordFirestoreDataSource>()) {
+      getIt.registerLazySingleton<ClinicalRecordFirestoreDataSource>(
+        () => ClinicalRecordFirestoreDataSource(getIt<FirebaseFirestore>()),
+      );
+    }
+
+    if (!getIt.isRegistered<ClinicalRecordRepository>()) {
+      getIt.registerLazySingleton<ClinicalRecordRepository>(
+        () => ClinicalRecordRepositoryImpl(getIt<ClinicalRecordFirestoreDataSource>()),
+      );
+    }
+
+    if (!getIt.isRegistered<CreateClinicalRecord>()) {
+      getIt.registerLazySingleton<CreateClinicalRecord>(
+        () => CreateClinicalRecord(getIt<ClinicalRecordRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<ObserveClinicalRecordsByPatient>()) {
+      getIt.registerLazySingleton<ObserveClinicalRecordsByPatient>(
+        () => ObserveClinicalRecordsByPatient(getIt<ClinicalRecordRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<GetClinicalRecordByAppointment>()) {
+      getIt.registerLazySingleton<GetClinicalRecordByAppointment>(
+        () => GetClinicalRecordByAppointment(getIt<ClinicalRecordRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<ClinicalRecordController>()) {
+      getIt.registerFactory<ClinicalRecordController>(
+        () => ClinicalRecordController(
+          createClinicalRecord: getIt<CreateClinicalRecord>(),
+          observeByPatient: getIt<ObserveClinicalRecordsByPatient>(),
+          getByAppointment: getIt<GetClinicalRecordByAppointment>(),
         ),
       );
     }

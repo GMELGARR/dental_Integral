@@ -25,12 +25,17 @@ class TimeSlot {
 /// Displays a grid of 30-minute time slots for a specific odontólogo + date.
 ///
 /// Green = available (tappable) · Red = occupied · Grey = past.
+/// When [duracionMinutos] > 30 the grid highlights the consecutive slots
+/// that will be occupied and validates availability before calling
+/// [onSlotSelected].
 class TimeSlotGrid extends StatelessWidget {
   const TimeSlotGrid({
     super.key,
     required this.slots,
     required this.selectedSlot,
     required this.onSlotSelected,
+    this.duracionMinutos = 30,
+    this.onInvalidSelection,
     this.odontologoNombre,
     this.fechaLabel,
   });
@@ -38,6 +43,14 @@ class TimeSlotGrid extends StatelessWidget {
   final List<TimeSlot> slots;
   final String? selectedSlot;
   final ValueChanged<String> onSlotSelected;
+
+  /// Duration of the appointment in minutes (default 30).
+  final int duracionMinutos;
+
+  /// Called when the user taps a slot that does not have enough consecutive
+  /// available slots for the requested duration.
+  final VoidCallback? onInvalidSelection;
+
   final String? odontologoNombre;
   final String? fechaLabel;
 
@@ -114,6 +127,36 @@ class TimeSlotGrid extends StatelessWidget {
     return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 
+  // ── Duration helpers ──────────────────────────────────────────
+
+  int get _slotsNeeded => (duracionMinutos / 30).ceil();
+
+  /// Set of "HH:mm" strings that would be occupied by the current selection.
+  Set<String> get _selectedRange {
+    if (selectedSlot == null) return {};
+    if (_slotsNeeded <= 1) return {selectedSlot!};
+
+    final start = _parseTime(selectedSlot!);
+    return {
+      for (var i = 0; i < _slotsNeeded; i++)
+        _formatTime(start.add(Duration(minutes: i * 30))),
+    };
+  }
+
+  /// Whether selecting [hora] gives enough consecutive available slots.
+  bool _canSelectSlot(String hora) {
+    if (_slotsNeeded <= 1) return true;
+
+    final start = _parseTime(hora);
+    for (var i = 0; i < _slotsNeeded; i++) {
+      final checkKey = _formatTime(start.add(Duration(minutes: i * 30)));
+      final idx = slots.indexWhere((s) => s.hora == checkKey);
+      if (idx == -1) return false; // slot doesn't exist (past schedule end)
+      if (slots[idx].state != SlotState.available) return false;
+    }
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -149,13 +192,15 @@ class TimeSlotGrid extends StatelessWidget {
         // ── Legend ───────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
-          child: Row(
+          child: Wrap(
+            spacing: 16,
+            runSpacing: 8,
             children: [
               _legendDot(AppColors.success, 'Disponible'),
-              const SizedBox(width: 16),
               _legendDot(AppColors.error, 'Ocupado'),
-              const SizedBox(width: 16),
               _legendDot(Colors.grey, 'Pasado'),
+              if (_slotsNeeded > 1)
+                _legendDot(AppColors.primary, 'Seleccionado'),
             ],
           ),
         ),
@@ -165,12 +210,19 @@ class TimeSlotGrid extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: slots.map((slot) {
-            final isSelected = slot.hora == selectedSlot;
+            final selectedRange = _selectedRange;
+            final isSelected = selectedRange.contains(slot.hora);
             return _SlotChip(
               slot: slot,
               isSelected: isSelected,
               onTap: slot.state == SlotState.available
-                  ? () => onSlotSelected(slot.hora)
+                  ? () {
+                      if (_canSelectSlot(slot.hora)) {
+                        onSlotSelected(slot.hora);
+                      } else {
+                        onInvalidSelection?.call();
+                      }
+                    }
                   : null,
             );
           }).toList(),

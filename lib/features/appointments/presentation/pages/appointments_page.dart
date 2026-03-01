@@ -8,6 +8,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/theme_mode_button.dart';
 import '../../../../core/widgets/gradient_header.dart';
+import '../../../clinical_records/presentation/pages/clinical_record_form_page.dart';
 import '../../../odontologists/domain/entities/odontologist.dart';
 import '../../../odontologists/presentation/controllers/odontologist_controller.dart';
 import '../../../patients/domain/entities/patient.dart';
@@ -77,6 +78,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       tipo: result.tipo,
       fecha: result.fecha,
       hora: result.hora,
+      duracionMinutos: result.duracionMinutos,
       odontologoId: result.odontologoId,
       odontologoNombre: result.odontologoNombre,
       pacienteNombre: result.pacienteNombre,
@@ -95,6 +97,42 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
           success
               ? 'Cita agendada para ${result.pacienteNombre}.'
               : _controller.errorMessage ?? 'Error al agendar.',
+        ),
+      ),
+    );
+  }
+
+  // ── Link patient to first-time appointment ────────────────────
+  Future<void> _linkPatient(Appointment appt) async {
+    final patientCtrl = getIt<PatientController>();
+    final patient = await showModalBottomSheet<Patient>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return _PatientPickerSheet(controller: patientCtrl);
+      },
+    );
+    patientCtrl.dispose();
+
+    if (patient == null || !mounted) return;
+
+    final ok = await _controller.linkPatient(
+      appointmentId: appt.id,
+      pacienteId: patient.id,
+      pacienteNombre: patient.nombre,
+      pacienteTelefono: patient.telefono,
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? 'Paciente "${patient.nombre}" vinculado a la cita.'
+              : _controller.errorMessage ?? 'Error al vincular.',
         ),
       ),
     );
@@ -140,6 +178,31 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     );
 
     if (selected == null || !mounted) return;
+
+    // ── Intercept "completada" → open clinical record form ────
+    if (selected == AppointmentStatus.completada) {
+      // Block if patient has no expediente (not registered).
+      if (appt.pacienteId == null || appt.pacienteId!.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Debe registrar y vincular al paciente antes de completar la cita.',
+            ),
+            duration: Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
+
+      final saved = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => ClinicalRecordFormPage(appointment: appt),
+        ),
+      );
+      if (saved != true || !mounted) return;
+      // Clinical record saved → now mark appointment as completada.
+    }
 
     final ok = await _controller.changeStatus(appt.id, selected);
     if (!mounted) return;
@@ -371,6 +434,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                             isUpdating:
                                 _controller.updatingId == appt.id,
                             onChangeStatus: () => _showStatusSheet(appt),
+                            onLinkPatient: () => _linkPatient(appt),
                           ),
                         );
                       },
@@ -442,12 +506,14 @@ class _AppointmentCard extends StatelessWidget {
     required this.isDark,
     required this.isUpdating,
     required this.onChangeStatus,
+    required this.onLinkPatient,
   });
 
   final Appointment appointment;
   final bool isDark;
   final bool isUpdating;
   final VoidCallback onChangeStatus;
+  final VoidCallback onLinkPatient;
 
   @override
   Widget build(BuildContext context) {
@@ -473,24 +539,28 @@ class _AppointmentCard extends StatelessWidget {
         ),
         child: Material(
           color: Colors.transparent,
-          child: InkWell(
-            onTap: isUpdating ? null : onChangeStatus,
-            borderRadius: AppSpacing.borderRadiusMd,
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: isUpdating
-                  ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(AppSpacing.lg),
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    )
-                  : Row(
-                      children: [
-                        // ── Time column ──────────────────
-                        SizedBox(
-                          width: 56,
-                          child: Column(
+          borderRadius: AppSpacing.borderRadiusMd,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              InkWell(
+                onTap: isUpdating ? null : onChangeStatus,
+                borderRadius: AppSpacing.borderRadiusMd,
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: isUpdating
+                      ? const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(AppSpacing.lg),
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : Row(
+                          children: [
+                            // ── Time column ──────────────────
+                            SizedBox(
+                              width: 56,
+                              child: Column(
                             children: [
                               Text(
                                 appointment.hora,
@@ -661,6 +731,40 @@ class _AppointmentCard extends StatelessWidget {
                     ),
             ),
           ),
+            // ── Link patient button for unlinked first-consult ──
+            if (appointment.esPrimeraConsulta &&
+                !appointment.tieneExpediente &&
+                !appointment.isTerminal)
+              Padding(
+                padding: const EdgeInsets.only(
+                  left: AppSpacing.lg,
+                  right: AppSpacing.lg,
+                  bottom: AppSpacing.md,
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 40,
+                  child: OutlinedButton.icon(
+                    onPressed: isUpdating ? null : onLinkPatient,
+                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                    label: const Text('Vincular paciente',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        )),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: BorderSide(
+                          color: AppColors.primary.withValues(alpha: 0.5)),
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -703,6 +807,7 @@ class _AppointmentFormResult {
     required this.tipo,
     required this.fecha,
     required this.hora,
+    required this.duracionMinutos,
     required this.odontologoId,
     required this.odontologoNombre,
     required this.pacienteNombre,
@@ -717,6 +822,7 @@ class _AppointmentFormResult {
   final String tipo;
   final DateTime fecha;
   final String hora;
+  final int duracionMinutos;
   final String odontologoId;
   final String odontologoNombre;
   final String pacienteNombre;
@@ -746,6 +852,7 @@ class _AppointmentFormPageState extends State<_AppointmentFormPage> {
   // Form state
   String _tipo = AppointmentType.primeraConsulta;
   DateTime _fecha = DateTime.now();
+  int _duracionMinutos = 30;
   String? _selectedHora; // from TimeSlotGrid
 
   // Odontólogo
@@ -875,6 +982,7 @@ class _AppointmentFormPageState extends State<_AppointmentFormPage> {
         tipo: _tipo,
         fecha: _fecha,
         hora: _selectedHora!,
+        duracionMinutos: _duracionMinutos,
         odontologoId: _odontologoId!,
         odontologoNombre: _odontologoNombre,
         pacienteNombre: pacienteNombre,
@@ -1170,6 +1278,30 @@ class _AppointmentFormPageState extends State<_AppointmentFormPage> {
             ),
             const SizedBox(height: AppSpacing.lg),
 
+            // Duration picker
+            DropdownButtonFormField<int>(
+              initialValue: _duracionMinutos,
+              decoration: const InputDecoration(
+                labelText: 'Duración de la cita',
+                prefixIcon: Icon(Icons.timer_outlined),
+              ),
+              items: const [
+                DropdownMenuItem(value: 30, child: Text('30 minutos')),
+                DropdownMenuItem(value: 60, child: Text('1 hora')),
+                DropdownMenuItem(value: 90, child: Text('1 hora 30 min')),
+                DropdownMenuItem(value: 120, child: Text('2 horas')),
+              ],
+              onChanged: (v) {
+                if (v != null) {
+                  setState(() {
+                    _duracionMinutos = v;
+                    _selectedHora = null; // reset slot when duration changes
+                  });
+                }
+              },
+            ),
+            const SizedBox(height: AppSpacing.lg),
+
             // Time slot grid or placeholder
             if (_selectedOdontologist == null)
               Container(
@@ -1206,8 +1338,18 @@ class _AppointmentFormPageState extends State<_AppointmentFormPage> {
               TimeSlotGrid(
                 slots: _slots,
                 selectedSlot: _selectedHora,
+                duracionMinutos: _duracionMinutos,
                 onSlotSelected: (hora) =>
                     setState(() => _selectedHora = hora),
+                onInvalidSelection: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'No hay $_duracionMinutos min consecutivos disponibles desde ese horario.',
+                      ),
+                    ),
+                  );
+                },
                 odontologoNombre: _odontologoNombre,
                 fechaLabel: dateText,
               ),
@@ -1227,12 +1369,27 @@ class _AppointmentFormPageState extends State<_AppointmentFormPage> {
                       Icon(Icons.check_circle_rounded,
                           size: 20, color: AppColors.success),
                       const SizedBox(width: AppSpacing.sm),
-                      Text(
-                        'Horario seleccionado: $_selectedHora',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: AppColors.success,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      Expanded(
+                        child: Builder(builder: (_) {
+                          final startParts = _selectedHora!.split(':');
+                          final startDt = DateTime(2000, 1, 1,
+                              int.parse(startParts[0]),
+                              int.parse(startParts[1]));
+                          final endDt = startDt.add(
+                              Duration(minutes: _duracionMinutos));
+                          final endStr =
+                              '${endDt.hour.toString().padLeft(2, '0')}:'
+                              '${endDt.minute.toString().padLeft(2, '0')}';
+                          return Text(
+                            _duracionMinutos > 30
+                                ? 'Horario: $_selectedHora – $endStr ($_duracionMinutos min)'
+                                : 'Horario seleccionado: $_selectedHora',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: AppColors.success,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          );
+                        }),
                       ),
                     ],
                   ),
@@ -1290,6 +1447,160 @@ class _AppointmentFormPageState extends State<_AppointmentFormPage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PATIENT PICKER BOTTOM SHEET
+// ══════════════════════════════════════════════════════════════════
+
+class _PatientPickerSheet extends StatefulWidget {
+  const _PatientPickerSheet({required this.controller});
+  final PatientController controller;
+
+  @override
+  State<_PatientPickerSheet> createState() => _PatientPickerSheetState();
+}
+
+class _PatientPickerSheetState extends State<_PatientPickerSheet> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl.addListener(() {
+      setState(() => _query = _searchCtrl.text.trim().toLowerCase());
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.7,
+      maxChildSize: 0.95,
+      minChildSize: 0.4,
+      builder: (_, scrollCtrl) {
+        return Column(
+          children: [
+            // ── Handle + title ──────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl, AppSpacing.lg, AppSpacing.xl, 0),
+              child: Column(
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade400,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(
+                    'Seleccionar paciente',
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  TextField(
+                    controller: _searchCtrl,
+                    decoration: const InputDecoration(
+                      hintText: 'Buscar por nombre o DPI...',
+                      prefixIcon: Icon(Icons.search, size: 20),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                ],
+              ),
+            ),
+
+            // ── Patient list ────────────────────────
+            Expanded(
+              child: AnimatedBuilder(
+                animation: widget.controller,
+                builder: (context, _) {
+                  if (widget.controller.isLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  var patients = widget.controller.patients
+                      .where((p) => p.activo)
+                      .toList();
+
+                  if (_query.isNotEmpty) {
+                    patients = patients
+                        .where((p) =>
+                            p.nombre.toLowerCase().contains(_query) ||
+                            p.dpi.contains(_query))
+                        .toList();
+                  }
+
+                  if (patients.isEmpty) {
+                    return Center(
+                      child: Text(
+                        _query.isEmpty
+                            ? 'No hay pacientes registrados.'
+                            : 'Sin resultados para "$_query".',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    );
+                  }
+
+                  return ListView.separated(
+                    controller: scrollCtrl,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.xl,
+                      vertical: AppSpacing.sm,
+                    ),
+                    itemCount: patients.length,
+                    separatorBuilder: (_, i) =>
+                        const Divider(height: 1),
+                    itemBuilder: (_, i) {
+                      final p = patients[i];
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor:
+                              AppColors.primary.withValues(alpha: 0.12),
+                          child: Text(
+                            p.nombre.isNotEmpty
+                                ? p.nombre[0].toUpperCase()
+                                : '?',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        title: Text(p.nombre),
+                        subtitle: Text('DPI: ${p.dpi}'),
+                        dense: true,
+                        onTap: () => Navigator.of(context).pop(p),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
