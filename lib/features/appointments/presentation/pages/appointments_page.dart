@@ -103,6 +103,52 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   }
 
   // ── Link patient to first-time appointment ────────────────────
+
+  // ── Walk-in (cita rápida) ──────────────────────────────────────
+  Future<void> _createWalkIn() async {
+    final result = await showModalBottomSheet<_WalkInResult>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => const _WalkInSheet(),
+    );
+    if (result == null || !mounted) return;
+
+    final now = DateTime.now();
+    final hora =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
+    final success = await _controller.create(
+      tipo: result.tipo,
+      fecha: now,
+      hora: hora,
+      duracionMinutos: result.duracionMinutos,
+      estado: AppointmentStatus.enAtencion, // skip to "en atención"
+      odontologoId: result.odontologoId,
+      odontologoNombre: result.odontologoNombre,
+      pacienteNombre: result.pacienteNombre,
+      pacienteTelefono: result.pacienteTelefono,
+      pacienteId: result.pacienteId,
+      nombreTemporal: result.nombreTemporal,
+      telefonoTemporal: result.telefonoTemporal,
+      motivo: result.motivo,
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? 'Cita rápida creada para ${result.pacienteNombre}.'
+              : _controller.errorMessage ?? 'Error al crear cita rápida.',
+        ),
+      ),
+    );
+  }
+
+  // ── Link patient to first-time appointment ────────────────────
   Future<void> _linkPatient(Appointment appt) async {
     final patientCtrl = getIt<PatientController>();
     final patient = await showModalBottomSheet<Patient>(
@@ -236,21 +282,36 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
         final appointments = _controller.appointments;
 
         return Scaffold(
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: _controller.isSaving ? null : _create,
-            icon: _controller.isSaving
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.add_rounded),
-            label: Text(
-              _controller.isSaving ? 'Guardando...' : 'Nueva cita',
-            ),
+          floatingActionButton: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ── Walk-in button ──
+              FloatingActionButton.small(
+                heroTag: 'walkIn',
+                onPressed: _controller.isSaving ? null : _createWalkIn,
+                backgroundColor: AppColors.warning,
+                child: const Icon(Icons.directions_walk_rounded, size: 20),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              // ── Normal appointment button ──
+              FloatingActionButton.extended(
+                heroTag: 'newAppt',
+                onPressed: _controller.isSaving ? null : _create,
+                icon: _controller.isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.add_rounded),
+                label: Text(
+                  _controller.isSaving ? 'Guardando...' : 'Nueva cita',
+                ),
+              ),
+            ],
           ),
           body: CustomScrollView(
             slivers: [
@@ -793,6 +854,433 @@ class _StatusChip extends StatelessWidget {
           fontSize: 10,
           fontWeight: FontWeight.w700,
         ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// WALK-IN (CITA RÁPIDA) SHEET
+// ══════════════════════════════════════════════════════════════════
+
+class _WalkInResult {
+  const _WalkInResult({
+    required this.tipo,
+    required this.duracionMinutos,
+    required this.odontologoId,
+    required this.odontologoNombre,
+    required this.pacienteNombre,
+    required this.pacienteTelefono,
+    this.pacienteId,
+    this.nombreTemporal,
+    this.telefonoTemporal,
+    this.motivo,
+  });
+
+  final String tipo;
+  final int duracionMinutos;
+  final String odontologoId;
+  final String odontologoNombre;
+  final String pacienteNombre;
+  final String pacienteTelefono;
+  final String? pacienteId;
+  final String? nombreTemporal;
+  final String? telefonoTemporal;
+  final String? motivo;
+}
+
+class _WalkInSheet extends StatefulWidget {
+  const _WalkInSheet();
+
+  @override
+  State<_WalkInSheet> createState() => _WalkInSheetState();
+}
+
+class _WalkInSheetState extends State<_WalkInSheet> {
+  final _formKey = GlobalKey<FormState>();
+
+  late final OdontologistController _odontCtrl;
+  late final PatientController _patientCtrl;
+
+  String _tipo = AppointmentType.primeraConsulta;
+  int _duracionMinutos = 30;
+
+  // Odontólogo
+  String? _odontologoId;
+  String _odontologoNombre = '';
+
+  // Patient (reconsulta)
+  Patient? _selectedPatient;
+
+  // Temporary patient (primera consulta)
+  final _nombreTempCtrl = TextEditingController();
+  final _telTempCtrl = TextEditingController();
+
+  // Motivo
+  final _motivoCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _odontCtrl = getIt<OdontologistController>();
+    _patientCtrl = getIt<PatientController>();
+  }
+
+  @override
+  void dispose() {
+    _nombreTempCtrl.dispose();
+    _telTempCtrl.dispose();
+    _motivoCtrl.dispose();
+    _odontCtrl.dispose();
+    _patientCtrl.dispose();
+    super.dispose();
+  }
+
+  bool get _isPrimeraConsulta => _tipo == AppointmentType.primeraConsulta;
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+
+    if (_odontologoId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecciona un odontólogo.')),
+      );
+      return;
+    }
+
+    if (!_isPrimeraConsulta && _selectedPatient == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecciona un paciente.')),
+      );
+      return;
+    }
+
+    final pacienteNombre = _isPrimeraConsulta
+        ? _nombreTempCtrl.text.trim()
+        : _selectedPatient!.nombre;
+    final pacienteTelefono = _isPrimeraConsulta
+        ? _telTempCtrl.text.trim()
+        : _selectedPatient!.telefono;
+
+    Navigator.of(context).pop(
+      _WalkInResult(
+        tipo: _tipo,
+        duracionMinutos: _duracionMinutos,
+        odontologoId: _odontologoId!,
+        odontologoNombre: _odontologoNombre,
+        pacienteNombre: pacienteNombre,
+        pacienteTelefono: pacienteTelefono,
+        pacienteId: _isPrimeraConsulta ? null : _selectedPatient!.id,
+        nombreTemporal:
+            _isPrimeraConsulta ? _nombreTempCtrl.text.trim() : null,
+        telefonoTemporal:
+            _isPrimeraConsulta ? _telTempCtrl.text.trim() : null,
+        motivo: _motivoCtrl.text.trim().isEmpty
+            ? null
+            : _motivoCtrl.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottom),
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollCtrl) {
+          return Container(
+            decoration: BoxDecoration(
+              color: theme.scaffoldBackgroundColor,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              children: [
+                // ── Handle ──
+                Padding(
+                  padding: const EdgeInsets.only(top: 12, bottom: 4),
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade400,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+
+                // ── Title ──
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.sm,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.warning.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(Icons.directions_walk_rounded,
+                            color: AppColors.warning, size: 22),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Cita rápida (Walk-in)',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            Text(
+                              'Paciente sin cita previa — entra directo a atención',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(),
+
+                // ── Form body ──
+                Expanded(
+                  child: SingleChildScrollView(
+                    controller: scrollCtrl,
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // ── Tipo ──
+                          SegmentedButton<String>(
+                            segments: const [
+                              ButtonSegment(
+                                value: AppointmentType.primeraConsulta,
+                                label: Text('1ª consulta'),
+                                icon: Icon(Icons.person_add_rounded),
+                              ),
+                              ButtonSegment(
+                                value: AppointmentType.reconsulta,
+                                label: Text('Reconsulta'),
+                                icon: Icon(Icons.person_search_rounded),
+                              ),
+                            ],
+                            selected: {_tipo},
+                            onSelectionChanged: (v) {
+                              setState(() {
+                                _tipo = v.first;
+                                _selectedPatient = null;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+
+                          // ── Odontólogo ──
+                          AnimatedBuilder(
+                            animation: _odontCtrl,
+                            builder: (context, _) {
+                              final odonts = _odontCtrl.odontologists
+                                  .where((o) => o.activo)
+                                  .toList();
+
+                              if (_odontCtrl.isLoading) {
+                                return const Center(
+                                    child: CircularProgressIndicator());
+                              }
+
+                              return DropdownButtonFormField<String>(
+                                initialValue: _odontologoId,
+                                decoration: const InputDecoration(
+                                  labelText: 'Odontólogo',
+                                  prefixIcon:
+                                      Icon(Icons.medical_services_rounded),
+                                ),
+                                items: odonts.map((o) {
+                                  return DropdownMenuItem(
+                                    value: o.id,
+                                    child: Text(o.nombre),
+                                  );
+                                }).toList(),
+                                onChanged: (v) {
+                                  if (v != null) {
+                                    final o =
+                                        odonts.firstWhere((o) => o.id == v);
+                                    setState(() {
+                                      _odontologoId = v;
+                                      _odontologoNombre = o.nombre;
+                                    });
+                                  }
+                                },
+                                validator: (v) =>
+                                    v == null ? 'Requerido' : null,
+                              );
+                            },
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+
+                          // ── Duración ──
+                          DropdownButtonFormField<int>(
+                            initialValue: _duracionMinutos,
+                            decoration: const InputDecoration(
+                              labelText: 'Duración estimada',
+                              prefixIcon: Icon(Icons.timer_outlined),
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                  value: 30, child: Text('30 minutos')),
+                              DropdownMenuItem(
+                                  value: 60, child: Text('1 hora')),
+                              DropdownMenuItem(
+                                  value: 90, child: Text('1 hora 30 min')),
+                              DropdownMenuItem(
+                                  value: 120, child: Text('2 horas')),
+                            ],
+                            onChanged: (v) {
+                              if (v != null) {
+                                setState(() => _duracionMinutos = v);
+                              }
+                            },
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+
+                          // ── Patient section ──
+                          Text(
+                            'Datos del paciente',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+
+                          if (_isPrimeraConsulta) ...[
+                            TextFormField(
+                              controller: _nombreTempCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Nombre del paciente',
+                                prefixIcon: Icon(Icons.person_rounded),
+                              ),
+                              textCapitalization:
+                                  TextCapitalization.words,
+                              validator: (v) =>
+                                  (v == null || v.trim().isEmpty)
+                                      ? 'Ingresa el nombre.'
+                                      : null,
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            TextFormField(
+                              controller: _telTempCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Teléfono',
+                                prefixIcon: Icon(Icons.phone_rounded),
+                              ),
+                              keyboardType: TextInputType.phone,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(8),
+                              ],
+                              validator: (v) =>
+                                  (v == null || v.trim().length < 8)
+                                      ? 'Ingresa un número de 8 dígitos.'
+                                      : null,
+                            ),
+                          ] else ...[
+                            // Patient picker for reconsulta
+                            AnimatedBuilder(
+                              animation: _patientCtrl,
+                              builder: (context, _) {
+                                final patients = _patientCtrl.patients
+                                    .where((p) => p.activo)
+                                    .toList();
+
+                                if (_patientCtrl.isLoading) {
+                                  return const Center(
+                                      child: CircularProgressIndicator());
+                                }
+
+                                return DropdownButtonFormField<String>(
+                                  initialValue: _selectedPatient?.id,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Paciente',
+                                    prefixIcon: Icon(Icons.person_search_rounded),
+                                  ),
+                                  items: patients.map((p) {
+                                    return DropdownMenuItem(
+                                      value: p.id,
+                                      child: Text(p.nombre),
+                                    );
+                                  }).toList(),
+                                  onChanged: (v) {
+                                    if (v != null) {
+                                      setState(() {
+                                        _selectedPatient = patients
+                                            .firstWhere((p) => p.id == v);
+                                      });
+                                    }
+                                  },
+                                  validator: (v) =>
+                                      v == null ? 'Selecciona un paciente.' : null,
+                                );
+                              },
+                            ),
+                          ],
+                          const SizedBox(height: AppSpacing.lg),
+
+                          // ── Motivo ──
+                          TextFormField(
+                            controller: _motivoCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Motivo (opcional)',
+                              prefixIcon:
+                                  Icon(Icons.description_rounded),
+                            ),
+                            maxLines: 2,
+                          ),
+                          const SizedBox(height: AppSpacing.xxl),
+
+                          // ── Submit ──
+                          FilledButton.icon(
+                            onPressed: _submit,
+                            icon: const Icon(
+                                Icons.directions_walk_rounded),
+                            label: const Text('Crear cita rápida'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.warning,
+                              foregroundColor: Colors.white,
+                              minimumSize:
+                                  const Size(double.infinity, 52),
+                              textStyle: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

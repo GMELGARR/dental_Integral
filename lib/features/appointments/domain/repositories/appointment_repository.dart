@@ -14,6 +14,7 @@ abstract class AppointmentRepository {
     required String pacienteNombre,
     required String pacienteTelefono,
     int duracionMinutos = 30,
+    String? estado,
     String? pacienteId,
     String? nombreTemporal,
     String? telefonoTemporal,
