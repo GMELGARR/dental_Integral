@@ -9,15 +9,54 @@ import '../../../../core/theme/theme_mode_button.dart';
 import '../../../../core/widgets/gradient_header.dart';
 import '../../../../core/widgets/module_card.dart';
 import '../../../admin_users/domain/entities/module_permission.dart';
+import '../../../appointments/presentation/controllers/appointment_controller.dart';
 import '../../../auth/presentation/controllers/auth_session_controller.dart';
+import '../../../odontologists/presentation/controllers/odontologist_controller.dart';
+import '../../../patients/presentation/controllers/patient_controller.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  late final AuthSessionController _authSession;
+  PatientController? _patientCtrl;
+  AppointmentController? _apptCtrl;
+  OdontologistController? _odontCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _authSession = getIt<AuthSessionController>();
+
+    // Only create controllers for modules the user can access.
+    final isAdmin = _authSession.isAdmin;
+
+    if (isAdmin || _authSession.hasModule(ModulePermission.patients)) {
+      _patientCtrl = getIt<PatientController>();
+    }
+    if (isAdmin || _authSession.hasModule(ModulePermission.appointments)) {
+      _apptCtrl = getIt<AppointmentController>();
+    }
+    if (isAdmin || _authSession.hasModule(ModulePermission.odontologists)) {
+      _odontCtrl = getIt<OdontologistController>();
+    }
+  }
+
+  @override
+  void dispose() {
+    _patientCtrl?.dispose();
+    _apptCtrl?.dispose();
+    _odontCtrl?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final authSession = getIt<AuthSessionController>();
-    final user = authSession.currentUser;
+    final user = _authSession.currentUser;
     final email = user?.email ?? 'usuario';
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -85,7 +124,7 @@ class HomePage extends StatelessWidget {
                         ),
                       ),
                       const ThemeModeButton(light: true),
-                      _LogoutButton(authSession: authSession),
+                      _LogoutButton(authSession: _authSession),
                     ],
                   ),
                   const Spacer(),
@@ -120,28 +159,46 @@ class HomePage extends StatelessWidget {
                 offset: const Offset(0, -16),
                 child: Row(
                   children: [
-                    _StatCard(
+                    // Pacientes counter
+                    _buildAnimatedStat(
+                      listenable: _patientCtrl,
+                      valueBuilder: () {
+                        if (_patientCtrl == null) return '--';
+                        if (_patientCtrl!.isLoading) return '...';
+                        return '${_patientCtrl!.patients.length}';
+                      },
                       icon: Icons.people_outline_rounded,
                       label: 'Pacientes',
-                      value: '--',
                       gradient: AppColors.primaryGradient,
                       isDark: isDark,
                     ),
                     const SizedBox(width: AppSpacing.md),
-                    _StatCard(
+                    // Citas hoy counter
+                    _buildAnimatedStat(
+                      listenable: _apptCtrl,
+                      valueBuilder: () {
+                        if (_apptCtrl == null) return '--';
+                        if (_apptCtrl!.isLoading) return '...';
+                        return '${_apptCtrl!.appointments.length}';
+                      },
                       icon: Icons.calendar_today_rounded,
                       label: 'Citas hoy',
-                      value: '--',
                       gradient: const LinearGradient(
                         colors: [Color(0xFF7C4DFF), Color(0xFFB388FF)],
                       ),
                       isDark: isDark,
                     ),
                     const SizedBox(width: AppSpacing.md),
-                    _StatCard(
+                    // Odontólogos activos counter
+                    _buildAnimatedStat(
+                      listenable: _odontCtrl,
+                      valueBuilder: () {
+                        if (_odontCtrl == null) return '--';
+                        if (_odontCtrl!.isLoading) return '...';
+                        return '${_odontCtrl!.odontologists.where((o) => o.activo).length}';
+                      },
                       icon: Icons.check_circle_outline_rounded,
                       label: 'Activos',
-                      value: '--',
                       gradient: const LinearGradient(
                         colors: [Color(0xFF00897B), Color(0xFF4DB6AC)],
                       ),
@@ -171,7 +228,7 @@ class HomePage extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                if (authSession.isAdmin) ...[
+                if (_authSession.isAdmin) ...[
                   ModuleCard(
                     icon: Icons.admin_panel_settings_rounded,
                     title: 'Administrar Usuarios',
@@ -183,8 +240,8 @@ class HomePage extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.md),
                 ],
-                if (authSession.isAdmin ||
-                    authSession.hasModule(ModulePermission.patients)) ...[
+                if (_authSession.isAdmin ||
+                    _authSession.hasModule(ModulePermission.patients)) ...[
                   ModuleCard(
                     icon: Icons.groups_rounded,
                     title: 'Pacientes',
@@ -196,8 +253,8 @@ class HomePage extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.md),
                 ],
-                if (authSession.isAdmin ||
-                    authSession.hasModule(ModulePermission.odontologists)) ...[
+                if (_authSession.isAdmin ||
+                    _authSession.hasModule(ModulePermission.odontologists)) ...[
                   ModuleCard(
                     icon: Icons.medical_services_rounded,
                     title: 'Odontólogos',
@@ -209,8 +266,8 @@ class HomePage extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.md),
                 ],
-                if (authSession.isAdmin ||
-                    authSession.hasModule(ModulePermission.treatments)) ...[
+                if (_authSession.isAdmin ||
+                    _authSession.hasModule(ModulePermission.treatments)) ...[
                   ModuleCard(
                     icon: Icons.healing_rounded,
                     title: 'Tratamientos',
@@ -222,8 +279,8 @@ class HomePage extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.md),
                 ],
-                if (authSession.isAdmin ||
-                    authSession.hasModule(ModulePermission.appointments)) ...[
+                if (_authSession.isAdmin ||
+                    _authSession.hasModule(ModulePermission.appointments)) ...[
                   ModuleCard(
                     icon: Icons.event_available_rounded,
                     title: 'Citas',
@@ -235,8 +292,8 @@ class HomePage extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.md),
                 ],
-                if (authSession.isAdmin ||
-                    authSession.hasModule(ModulePermission.billing)) ...[
+                if (_authSession.isAdmin ||
+                    _authSession.hasModule(ModulePermission.billing)) ...[
                   ModuleCard(
                     icon: Icons.receipt_long_rounded,
                     title: 'Facturación',
@@ -254,8 +311,8 @@ class HomePage extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.md),
                 ],
-                if (authSession.isAdmin ||
-                    authSession.hasModule(ModulePermission.inventory)) ...[
+                if (_authSession.isAdmin ||
+                    _authSession.hasModule(ModulePermission.inventory)) ...[
                   ModuleCard(
                     icon: Icons.inventory_2_rounded,
                     title: 'Inventario',
@@ -267,8 +324,8 @@ class HomePage extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.md),
                 ],
-                if (authSession.isAdmin ||
-                    authSession.hasModule(ModulePermission.reports)) ...[
+                if (_authSession.isAdmin ||
+                    _authSession.hasModule(ModulePermission.reports)) ...[
                   ModuleCard(
                     icon: Icons.bar_chart_rounded,
                     title: 'Reportes',
@@ -288,13 +345,13 @@ class HomePage extends StatelessWidget {
                 ],
 
                 // No modules message
-                if (!authSession.isAdmin &&
-                    !authSession.hasModule(ModulePermission.patients) &&
-                    !authSession.hasModule(ModulePermission.treatments) &&
-                    !authSession.hasModule(ModulePermission.appointments) &&
-                    !authSession.hasModule(ModulePermission.billing) &&
-                    !authSession.hasModule(ModulePermission.inventory) &&
-                    !authSession.hasModule(ModulePermission.reports))
+                if (!_authSession.isAdmin &&
+                    !_authSession.hasModule(ModulePermission.patients) &&
+                    !_authSession.hasModule(ModulePermission.treatments) &&
+                    !_authSession.hasModule(ModulePermission.appointments) &&
+                    !_authSession.hasModule(ModulePermission.billing) &&
+                    !_authSession.hasModule(ModulePermission.inventory) &&
+                    !_authSession.hasModule(ModulePermission.reports))
                   Container(
                     padding: AppSpacing.cardPaddingLarge,
                     decoration: BoxDecoration(
@@ -343,6 +400,35 @@ class HomePage extends StatelessWidget {
     if (hour < 12) return 'Buenos días';
     if (hour < 18) return 'Buenas tardes';
     return 'Buenas noches';
+  }
+
+  Widget _buildAnimatedStat({
+    required Listenable? listenable,
+    required String Function() valueBuilder,
+    required IconData icon,
+    required String label,
+    required LinearGradient gradient,
+    required bool isDark,
+  }) {
+    if (listenable == null) {
+      return _StatCard(
+        icon: icon,
+        label: label,
+        value: '--',
+        gradient: gradient,
+        isDark: isDark,
+      );
+    }
+    return AnimatedBuilder(
+      animation: listenable,
+      builder: (context, _) => _StatCard(
+        icon: icon,
+        label: label,
+        value: valueBuilder(),
+        gradient: gradient,
+        isDark: isDark,
+      ),
+    );
   }
 }
 
