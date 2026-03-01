@@ -35,6 +35,13 @@ import '../../features/inventory/domain/usecases/create_inventory_item.dart';
 import '../../features/inventory/domain/usecases/observe_inventory.dart';
 import '../../features/inventory/domain/usecases/update_inventory_item.dart';
 import '../../features/inventory/presentation/controllers/inventory_controller.dart';
+import '../../features/patients/data/datasources/patient_firestore_data_source.dart';
+import '../../features/patients/data/repositories/patient_repository_impl.dart';
+import '../../features/patients/domain/repositories/patient_repository.dart';
+import '../../features/patients/domain/usecases/create_patient.dart';
+import '../../features/patients/domain/usecases/observe_patients.dart';
+import '../../features/patients/domain/usecases/update_patient.dart';
+import '../../features/patients/presentation/controllers/patient_controller.dart';
 import '../../features/auth/data/datasources/firebase_auth_data_source.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
@@ -312,6 +319,47 @@ Future<void> setupDependencies() async {
           createInventoryItem: getIt<CreateInventoryItem>(),
           updateInventoryItem: getIt<UpdateInventoryItem>(),
           adjustStock: getIt<AdjustStock>(),
+        ),
+      );
+    }
+
+    // ── Patients ─────────────────────────────────────────────────
+    if (!getIt.isRegistered<PatientFirestoreDataSource>()) {
+      getIt.registerLazySingleton<PatientFirestoreDataSource>(
+        () => PatientFirestoreDataSource(getIt<FirebaseFirestore>()),
+      );
+    }
+
+    if (!getIt.isRegistered<PatientRepository>()) {
+      getIt.registerLazySingleton<PatientRepository>(
+        () => PatientRepositoryImpl(getIt<PatientFirestoreDataSource>()),
+      );
+    }
+
+    if (!getIt.isRegistered<ObservePatients>()) {
+      getIt.registerLazySingleton<ObservePatients>(
+        () => ObservePatients(getIt<PatientRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<CreatePatient>()) {
+      getIt.registerLazySingleton<CreatePatient>(
+        () => CreatePatient(getIt<PatientRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<UpdatePatient>()) {
+      getIt.registerLazySingleton<UpdatePatient>(
+        () => UpdatePatient(getIt<PatientRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<PatientController>()) {
+      getIt.registerFactory<PatientController>(
+        () => PatientController(
+          observePatients: getIt<ObservePatients>(),
+          createPatient: getIt<CreatePatient>(),
+          updatePatient: getIt<UpdatePatient>(),
         ),
       );
     }

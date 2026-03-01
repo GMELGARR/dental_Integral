@@ -30,6 +30,11 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /pacientes/{docId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
     match /audit_logs/{logId} {
       allow read: if isAdmin();
       allow write: if false;
