@@ -14,6 +14,7 @@ import '../../features/odontologists/presentation/pages/odontologist_management_
 import '../../features/treatments/presentation/pages/treatment_management_page.dart';
 import '../../features/inventory/presentation/pages/inventory_management_page.dart';
 import '../../features/patients/presentation/pages/patients_page.dart';
+import '../../features/appointments/presentation/pages/appointments_page.dart';
 import '../di/service_locator.dart';
 import '../../features/home/presentation/pages/home_page.dart';
 
@@ -82,6 +83,11 @@ class AppRouter {
         name: 'patients',
         builder: (context, state) => const PatientsPage(),
       ),
+      GoRoute(
+        path: '/appointments',
+        name: 'appointments',
+        builder: (context, state) => const AppointmentsPage(),
+      ),
     ],
     redirect: (context, state) {
       final location = state.matchedLocation;
@@ -129,6 +135,12 @@ class AppRouter {
       final canAccessInventory =
           _authSession.isAdmin || _authSession.hasModule(ModulePermission.inventory);
       if (location.startsWith('/inventory') && !canAccessInventory) {
+        return '/';
+      }
+
+      final canAccessAppointments =
+          _authSession.isAdmin || _authSession.hasModule(ModulePermission.appointments);
+      if (location.startsWith('/appointments') && !canAccessAppointments) {
         return '/';
       }
 

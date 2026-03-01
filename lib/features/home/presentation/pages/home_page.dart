@@ -231,13 +231,7 @@ class HomePage extends StatelessWidget {
                     iconGradient: const LinearGradient(
                       colors: [Color(0xFF7C4DFF), Color(0xFFB388FF)],
                     ),
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Módulo en desarrollo.'),
-                        ),
-                      );
-                    },
+                    onTap: () => context.push('/appointments'),
                   ),
                   const SizedBox(height: AppSpacing.md),
                 ],

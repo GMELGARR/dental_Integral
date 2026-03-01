@@ -42,6 +42,13 @@ import '../../features/patients/domain/usecases/create_patient.dart';
 import '../../features/patients/domain/usecases/observe_patients.dart';
 import '../../features/patients/domain/usecases/update_patient.dart';
 import '../../features/patients/presentation/controllers/patient_controller.dart';
+import '../../features/appointments/data/datasources/appointment_firestore_data_source.dart';
+import '../../features/appointments/data/repositories/appointment_repository_impl.dart';
+import '../../features/appointments/domain/repositories/appointment_repository.dart';
+import '../../features/appointments/domain/usecases/create_appointment.dart';
+import '../../features/appointments/domain/usecases/observe_appointments.dart';
+import '../../features/appointments/domain/usecases/update_appointment.dart';
+import '../../features/appointments/presentation/controllers/appointment_controller.dart';
 import '../../features/auth/data/datasources/firebase_auth_data_source.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
@@ -360,6 +367,47 @@ Future<void> setupDependencies() async {
           observePatients: getIt<ObservePatients>(),
           createPatient: getIt<CreatePatient>(),
           updatePatient: getIt<UpdatePatient>(),
+        ),
+      );
+    }
+
+    // ── Appointments ─────────────────────────────────────────────
+    if (!getIt.isRegistered<AppointmentFirestoreDataSource>()) {
+      getIt.registerLazySingleton<AppointmentFirestoreDataSource>(
+        () => AppointmentFirestoreDataSource(getIt<FirebaseFirestore>()),
+      );
+    }
+
+    if (!getIt.isRegistered<AppointmentRepository>()) {
+      getIt.registerLazySingleton<AppointmentRepository>(
+        () => AppointmentRepositoryImpl(getIt<AppointmentFirestoreDataSource>()),
+      );
+    }
+
+    if (!getIt.isRegistered<ObserveAppointments>()) {
+      getIt.registerLazySingleton<ObserveAppointments>(
+        () => ObserveAppointments(getIt<AppointmentRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<CreateAppointment>()) {
+      getIt.registerLazySingleton<CreateAppointment>(
+        () => CreateAppointment(getIt<AppointmentRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<UpdateAppointment>()) {
+      getIt.registerLazySingleton<UpdateAppointment>(
+        () => UpdateAppointment(getIt<AppointmentRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<AppointmentController>()) {
+      getIt.registerFactory<AppointmentController>(
+        () => AppointmentController(
+          observeAppointments: getIt<ObserveAppointments>(),
+          createAppointment: getIt<CreateAppointment>(),
+          updateAppointment: getIt<UpdateAppointment>(),
         ),
       );
     }
