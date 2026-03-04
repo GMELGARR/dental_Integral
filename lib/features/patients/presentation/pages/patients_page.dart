@@ -9,6 +9,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/theme_mode_button.dart';
 import '../../../../core/widgets/gradient_header.dart';
 import '../../../clinical_records/presentation/pages/patient_history_page.dart';
+import '../../../odontogram/presentation/pages/odontogram_page.dart';
 import '../../domain/entities/patient.dart';
 import '../controllers/patient_controller.dart';
 
@@ -744,6 +745,30 @@ class _PatientDetailPage extends StatelessWidget {
             icon: Icons.notes_rounded,
             label: 'Notas clínicas',
             value: patient.notasClinicas,
+          ),
+
+          const SizedBox(height: AppSpacing.xl),
+
+          // ── Odontograma button ──────────────
+          _SectionHeader(title: 'Odontograma'),
+          const SizedBox(height: AppSpacing.md),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: FilledButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => OdontogramPage(
+                      patientId: patient.id,
+                      patientName: patient.nombre,
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.grid_view_rounded),
+              label: const Text('Ver odontograma'),
+            ),
           ),
 
           const SizedBox(height: AppSpacing.xl),

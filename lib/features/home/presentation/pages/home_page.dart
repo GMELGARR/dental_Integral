@@ -327,13 +327,7 @@ class _HomePageState extends State<HomePage> {
                     iconGradient: const LinearGradient(
                       colors: [Color(0xFFFFB300), Color(0xFFFFD54F)],
                     ),
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Módulo en desarrollo.'),
-                        ),
-                      );
-                    },
+                    onTap: () => context.push('/reports'),
                   ),
                   const SizedBox(height: AppSpacing.md),
                 ],

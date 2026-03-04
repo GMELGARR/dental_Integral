@@ -16,6 +16,7 @@ import '../../features/inventory/presentation/pages/inventory_management_page.da
 import '../../features/patients/presentation/pages/patients_page.dart';
 import '../../features/appointments/presentation/pages/appointments_page.dart';
 import '../../features/billing/presentation/pages/billing_page.dart';
+import '../../features/reports/presentation/pages/reports_page.dart';
 import '../di/service_locator.dart';
 import '../../features/home/presentation/pages/home_page.dart';
 
@@ -93,6 +94,11 @@ class AppRouter {
         path: '/billing',
         name: 'billing',
         builder: (context, state) => const BillingPage(),
+      ),
+      GoRoute(
+        path: '/reports',
+        name: 'reports',
+        builder: (context, state) => const ReportsPage(),
       ),
     ],
     redirect: (context, state) {

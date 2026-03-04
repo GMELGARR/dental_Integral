@@ -65,6 +65,18 @@ import '../../features/clinical_records/domain/usecases/get_clinical_record_by_a
 import '../../features/clinical_records/domain/usecases/observe_all_clinical_records.dart';
 import '../../features/clinical_records/domain/usecases/observe_clinical_records_by_patient.dart';
 import '../../features/clinical_records/presentation/controllers/clinical_record_controller.dart';
+import '../../features/odontogram/data/datasources/odontogram_firestore_data_source.dart';
+import '../../features/odontogram/data/repositories/odontogram_repository_impl.dart';
+import '../../features/odontogram/domain/repositories/odontogram_repository.dart';
+import '../../features/odontogram/domain/usecases/get_odontogram.dart';
+import '../../features/odontogram/domain/usecases/observe_odontogram.dart';
+import '../../features/odontogram/domain/usecases/save_odontogram.dart';
+import '../../features/odontogram/presentation/controllers/odontogram_controller.dart';
+import '../../features/reports/data/datasources/reports_firestore_data_source.dart';
+import '../../features/reports/data/repositories/reports_repository_impl.dart';
+import '../../features/reports/domain/repositories/reports_repository.dart';
+import '../../features/reports/domain/usecases/generate_report.dart';
+import '../../features/reports/presentation/controllers/reports_controller.dart';
 import '../../features/auth/data/datasources/firebase_auth_data_source.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
@@ -521,6 +533,71 @@ Future<void> setupDependencies() async {
           observeByPatient: getIt<ObserveClinicalRecordsByPatient>(),
           getByAppointment: getIt<GetClinicalRecordByAppointment>(),
         ),
+      );
+    }
+
+    // ── Odontogram ─────────────────────────────────────────────────
+    if (!getIt.isRegistered<OdontogramFirestoreDataSource>()) {
+      getIt.registerLazySingleton<OdontogramFirestoreDataSource>(
+        () => OdontogramFirestoreDataSource(firestore: getIt<FirebaseFirestore>()),
+      );
+    }
+
+    if (!getIt.isRegistered<OdontogramRepository>()) {
+      getIt.registerLazySingleton<OdontogramRepository>(
+        () => OdontogramRepositoryImpl(getIt<OdontogramFirestoreDataSource>()),
+      );
+    }
+
+    if (!getIt.isRegistered<GetOdontogram>()) {
+      getIt.registerLazySingleton<GetOdontogram>(
+        () => GetOdontogram(getIt<OdontogramRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<ObserveOdontogram>()) {
+      getIt.registerLazySingleton<ObserveOdontogram>(
+        () => ObserveOdontogram(getIt<OdontogramRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<SaveOdontogram>()) {
+      getIt.registerLazySingleton<SaveOdontogram>(
+        () => SaveOdontogram(getIt<OdontogramRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<OdontogramController>()) {
+      getIt.registerFactory<OdontogramController>(
+        () => OdontogramController(
+          observeOdontogram: getIt<ObserveOdontogram>(),
+          saveOdontogram: getIt<SaveOdontogram>(),
+        ),
+      );
+    }
+
+    // ── Reports ──────────────────────────────────────────────
+    if (!getIt.isRegistered<ReportsFirestoreDataSource>()) {
+      getIt.registerLazySingleton<ReportsFirestoreDataSource>(
+        () => ReportsFirestoreDataSource(getIt<FirebaseFirestore>()),
+      );
+    }
+
+    if (!getIt.isRegistered<ReportsRepository>()) {
+      getIt.registerLazySingleton<ReportsRepository>(
+        () => ReportsRepositoryImpl(getIt<ReportsFirestoreDataSource>()),
+      );
+    }
+
+    if (!getIt.isRegistered<GenerateReport>()) {
+      getIt.registerLazySingleton<GenerateReport>(
+        () => GenerateReport(getIt<ReportsRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<ReportsController>()) {
+      getIt.registerFactory<ReportsController>(
+        () => ReportsController(getIt<GenerateReport>()),
       );
     }
   } else {
