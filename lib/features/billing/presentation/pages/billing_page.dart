@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -8,13 +9,15 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/theme_mode_button.dart';
 import '../../../../core/widgets/gradient_header.dart';
+import '../../../clinical_records/domain/entities/clinical_record.dart';
+import '../../../clinical_records/domain/usecases/observe_all_clinical_records.dart';
 import '../../../patients/domain/entities/patient.dart';
 import '../../../patients/presentation/controllers/patient_controller.dart';
 import '../../domain/entities/payment.dart';
 import '../controllers/billing_controller.dart';
 
 // ═══════════════════════════════════════════════════════════════════
-//  BILLING PAGE
+//  BILLING PAGE  (Pagos + Cuentas tabs)
 // ═══════════════════════════════════════════════════════════════════
 
 class BillingPage extends StatefulWidget {
@@ -24,22 +27,37 @@ class BillingPage extends StatefulWidget {
   State<BillingPage> createState() => _BillingPageState();
 }
 
-class _BillingPageState extends State<BillingPage> {
-  late final BillingController _controller;
+class _BillingPageState extends State<BillingPage>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabCtrl;
+  late final BillingController _billingCtrl;
   late final PatientController _patientCtrl;
+
+  // Clinical records stream for accounts tab
+  StreamSubscription<List<ClinicalRecord>>? _recordsSub;
+  List<ClinicalRecord> _allRecords = [];
+
   final _searchCtrl = TextEditingController();
   String _searchQuery = '';
-  String _filterMethod = 'todos'; // todos | efectivo | tarjeta | transferencia
+  String _filterMethod = 'todos';
 
   @override
   void initState() {
     super.initState();
-    _controller = getIt<BillingController>();
+    _tabCtrl = TabController(length: 2, vsync: this);
+    _billingCtrl = getIt<BillingController>();
     _patientCtrl = getIt<PatientController>();
-    _controller.startObservingAll();
-    _controller.addListener(_onChanged);
+    _billingCtrl.startObservingAll();
+    _billingCtrl.addListener(_onChanged);
     _searchCtrl.addListener(() {
       setState(() => _searchQuery = _searchCtrl.text.trim().toLowerCase());
+    });
+
+    // Start observing clinical records for accounts tab
+    final observeAllRecords = getIt<ObserveAllClinicalRecords>();
+    _recordsSub = observeAllRecords().listen((records) {
+      _allRecords = records;
+      if (mounted) setState(() {});
     });
   }
 
@@ -49,14 +67,16 @@ class _BillingPageState extends State<BillingPage> {
 
   @override
   void dispose() {
-    _controller.removeListener(_onChanged);
+    _tabCtrl.dispose();
+    _billingCtrl.removeListener(_onChanged);
     _searchCtrl.dispose();
+    _recordsSub?.cancel();
     super.dispose();
   }
 
   // ── Filtered payments ────────────────────────────────────────
-  List<Payment> get _filtered {
-    var list = _controller.payments;
+  List<Payment> get _filteredPayments {
+    var list = _billingCtrl.payments;
     if (_filterMethod != 'todos') {
       list = list.where((p) => p.metodoPago == _filterMethod).toList();
     }
@@ -73,7 +93,7 @@ class _BillingPageState extends State<BillingPage> {
   // ── Summary helpers ──────────────────────────────────────────
   double get _todayTotal {
     final now = DateTime.now();
-    return _controller.payments
+    return _billingCtrl.payments
         .where((p) =>
             p.fecha.year == now.year &&
             p.fecha.month == now.month &&
@@ -83,14 +103,14 @@ class _BillingPageState extends State<BillingPage> {
 
   double get _monthTotal {
     final now = DateTime.now();
-    return _controller.payments
+    return _billingCtrl.payments
         .where((p) => p.fecha.year == now.year && p.fecha.month == now.month)
         .fold(0.0, (s, p) => s + p.monto);
   }
 
   int get _todayCount {
     final now = DateTime.now();
-    return _controller.payments
+    return _billingCtrl.payments
         .where((p) =>
             p.fecha.year == now.year &&
             p.fecha.month == now.month &&
@@ -98,21 +118,64 @@ class _BillingPageState extends State<BillingPage> {
         .length;
   }
 
-  // ── Register new payment ─────────────────────────────────────
-  Future<void> _registerPayment() async {
+  // ── Patient account data ─────────────────────────────────────
+  List<_PatientAccount> get _patientAccounts {
+    final map = <String, _PatientAccount>{};
+
+    for (final r in _allRecords) {
+      final acc = map.putIfAbsent(
+        r.pacienteId,
+        () => _PatientAccount(
+          pacienteId: r.pacienteId,
+          pacienteNombre: r.pacienteNombre,
+        ),
+      );
+      acc.totalCargado += r.costoTotal;
+    }
+
+    for (final p in _billingCtrl.payments) {
+      final acc = map.putIfAbsent(
+        p.pacienteId,
+        () => _PatientAccount(
+          pacienteId: p.pacienteId,
+          pacienteNombre: p.pacienteNombre,
+        ),
+      );
+      acc.totalPagado += p.monto;
+    }
+
+    var accounts = map.values.toList()
+      ..sort((a, b) => b.saldoPendiente.compareTo(a.saldoPendiente));
+
+    if (_searchQuery.isNotEmpty) {
+      accounts = accounts
+          .where(
+              (a) => a.pacienteNombre.toLowerCase().contains(_searchQuery))
+          .toList();
+    }
+
+    return accounts;
+  }
+
+  // ── Register new payment ────────────────────────────────────
+  Future<void> _registerPayment({String? preselectedPatientId}) async {
     final result = await showModalBottomSheet<_PaymentFormResult>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusXl)),
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusXl)),
       ),
-      builder: (_) => _PaymentFormSheet(patients: _patientCtrl.patients),
+      builder: (_) => _PaymentFormSheet(
+        patients: _patientCtrl.patients,
+        preselectedPatientId: preselectedPatientId,
+      ),
     );
 
     if (result == null || !mounted) return;
 
-    final ok = await _controller.addPayment(
+    final ok = await _billingCtrl.addPayment(
       pacienteId: result.pacienteId,
       pacienteNombre: result.pacienteNombre,
       monto: result.monto,
@@ -123,13 +186,14 @@ class _BillingPageState extends State<BillingPage> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(ok ? 'Pago registrado correctamente.' : 'Error al registrar pago.'),
+        content: Text(
+            ok ? 'Pago registrado correctamente.' : 'Error al registrar pago.'),
         backgroundColor: ok ? AppColors.success : AppColors.error,
       ),
     );
   }
 
-  // ── Delete payment ───────────────────────────────────────────
+  // ── Delete payment ──────────────────────────────────────────
   Future<void> _deletePayment(Payment payment) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -154,7 +218,7 @@ class _BillingPageState extends State<BillingPage> {
     );
     if (confirm != true || !mounted) return;
 
-    final ok = await _controller.removePayment(payment.id);
+    final ok = await _billingCtrl.removePayment(payment.id);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -164,235 +228,665 @@ class _BillingPageState extends State<BillingPage> {
     );
   }
 
+  // ── Show patient account detail ─────────────────────────────
+  void _showAccountDetail(_PatientAccount account) {
+    final records = _allRecords
+        .where((r) => r.pacienteId == account.pacienteId)
+        .toList();
+    final payments = _billingCtrl.payments
+        .where((p) => p.pacienteId == account.pacienteId)
+        .toList();
+
+    final fmt = NumberFormat('#,##0.00', 'en');
+    final dateFmt = DateFormat('dd/MM/yyyy', 'es');
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: theme.scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusXl)),
+      ),
+      builder: (_) => SafeArea(
+        child: DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          maxChildSize: 0.95,
+          minChildSize: 0.4,
+          expand: false,
+          builder: (ctx, scrollCtrl) => Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
+            child: ListView(
+              controller: scrollCtrl,
+              children: [
+                const SizedBox(height: AppSpacing.sm),
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.onSurfaceVariant
+                          .withValues(alpha: 0.3),
+                      borderRadius: AppSpacing.borderRadiusSm,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+
+                // Patient name header
+                Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor:
+                          AppColors.primary.withValues(alpha: 0.15),
+                      child: Text(
+                        account.pacienteNombre.isNotEmpty
+                            ? account.pacienteNombre[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Text(
+                        account.pacienteNombre,
+                        style: theme.textTheme.titleLarge,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+
+                // Balance summary row
+                Row(
+                  children: [
+                    Expanded(
+                      child: _MiniStat(
+                        label: 'Cargado',
+                        value: 'Q ${fmt.format(account.totalCargado)}',
+                        color: AppColors.info,
+                        isDark: isDark,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: _MiniStat(
+                        label: 'Pagado',
+                        value: 'Q ${fmt.format(account.totalPagado)}',
+                        color: AppColors.success,
+                        isDark: isDark,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: _MiniStat(
+                        label: 'Pendiente',
+                        value: 'Q ${fmt.format(account.saldoPendiente)}',
+                        color: account.saldoPendiente > 0
+                            ? AppColors.error
+                            : AppColors.success,
+                        isDark: isDark,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xl),
+
+                // Treatments list
+                if (records.isNotEmpty) ...[
+                  Text('Tratamientos realizados',
+                      style: theme.textTheme.titleSmall),
+                  const SizedBox(height: AppSpacing.sm),
+                  ...records.map((r) => Padding(
+                        padding:
+                            const EdgeInsets.only(bottom: AppSpacing.xs),
+                        child: Container(
+                          padding: const EdgeInsets.all(AppSpacing.md),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? AppColors.cardDark
+                                : AppColors.cardLight,
+                            borderRadius: AppSpacing.borderRadiusMd,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.medical_services_outlined,
+                                  size: 18,
+                                  color: AppColors.info
+                                      .withValues(alpha: 0.7)),
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      r.tratamientos
+                                          .map((t) => t.nombre)
+                                          .join(', '),
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w600),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Text(
+                                      dateFmt.format(r.fecha),
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Text(
+                                'Q ${fmt.format(r.costoTotal)}',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.info,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+
+                // Payments list
+                if (payments.isNotEmpty) ...[
+                  Text('Pagos realizados',
+                      style: theme.textTheme.titleSmall),
+                  const SizedBox(height: AppSpacing.sm),
+                  ...payments.map((p) => Padding(
+                        padding:
+                            const EdgeInsets.only(bottom: AppSpacing.xs),
+                        child: Container(
+                          padding: const EdgeInsets.all(AppSpacing.md),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? AppColors.cardDark
+                                : AppColors.cardLight,
+                            borderRadius: AppSpacing.borderRadiusMd,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.payments_rounded,
+                                  size: 18,
+                                  color: AppColors.success
+                                      .withValues(alpha: 0.7)),
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      Payment.metodoPagoLabel(
+                                          p.metodoPago),
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w600),
+                                    ),
+                                    Text(
+                                      dateFmt.format(p.fecha),
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Text(
+                                'Q ${fmt.format(p.monto)}',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.success,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )),
+                ],
+
+                // Quick pay button
+                const SizedBox(height: AppSpacing.lg),
+                if (account.saldoPendiente > 0)
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _registerPayment(
+                            preselectedPatientId: account.pacienteId);
+                      },
+                      icon: const Icon(Icons.payments_rounded, size: 18),
+                      label: const Text('Registrar abono'),
+                    ),
+                  ),
+                const SizedBox(height: AppSpacing.xxl),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // ── BUILD ────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final fmt = NumberFormat('#,##0.00', 'es');
-    final dateFmt = DateFormat('dd/MM/yyyy HH:mm', 'es');
-    final payments = _filtered;
+    final fmt = NumberFormat('#,##0.00', 'en');
 
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          // ── Header ──────────────────────────────────────
-          SliverToBoxAdapter(
-            child: GradientHeader(
-              height: 200,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      IconButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Facturación',
-                              style: theme.textTheme.headlineSmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
+      body: Column(
+        children: [
+          // ── Header ──────────────────────────────────
+          GradientHeader(
+            height: 175,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.arrow_back_rounded,
+                          color: Colors.white),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Facturación',
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
                             ),
-                            Text(
-                              '${_controller.payments.length} pagos registrados',
-                              style: theme.textTheme.bodySmall
-                                  ?.copyWith(color: Colors.white70),
-                            ),
-                          ],
-                        ),
+                          ),
+                          Text(
+                            '${_billingCtrl.payments.length} pagos registrados',
+                            style: theme.textTheme.bodySmall
+                                ?.copyWith(color: Colors.white70),
+                          ),
+                        ],
                       ),
-                      const ThemeModeButton(),
-                    ],
-                  ),
-                  const Spacer(),
-                  // Search bar
-                  TextField(
-                    controller: _searchCtrl,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Buscar por paciente…',
-                      hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
-                      prefixIcon: Icon(
-                        Icons.search_rounded,
-                        color: Colors.white.withValues(alpha: 0.7),
-                      ),
-                      filled: true,
-                      fillColor: Colors.white.withValues(alpha: 0.15),
-                      border: OutlineInputBorder(
-                        borderRadius: AppSpacing.borderRadiusLg,
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0),
                     ),
+                    const ThemeModeButton(),
+                  ],
+                ),
+                const Spacer(),
+                // Search bar
+                TextField(
+                  controller: _searchCtrl,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Buscar por paciente…',
+                    hintStyle:
+                        TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+                    prefixIcon: Icon(
+                      Icons.search_rounded,
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white.withValues(alpha: 0.15),
+                    border: OutlineInputBorder(
+                      borderRadius: AppSpacing.borderRadiusLg,
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
 
-          // ── Summary cards ───────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xl, AppSpacing.lg, AppSpacing.xl, AppSpacing.sm,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _SummaryCard(
-                      icon: Icons.today_rounded,
-                      label: 'Hoy',
-                      amount: 'Q ${fmt.format(_todayTotal)}',
-                      subtitle: '$_todayCount pagos',
-                      color: AppColors.primary,
-                      isDark: isDark,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: _SummaryCard(
-                      icon: Icons.calendar_month_rounded,
-                      label: 'Este mes',
-                      amount: 'Q ${fmt.format(_monthTotal)}',
-                      subtitle: DateFormat('MMMM yyyy', 'es').format(DateTime.now()),
-                      color: AppColors.success,
-                      isDark: isDark,
-                    ),
-                  ),
-                ],
-              ),
+          // ── Tab bar ─────────────────────────────────
+          Container(
+            color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+            child: TabBar(
+              controller: _tabCtrl,
+              labelColor: AppColors.primary,
+              unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+              indicatorColor: AppColors.primary,
+              tabs: const [
+                Tab(icon: Icon(Icons.payments_rounded), text: 'Pagos'),
+                Tab(
+                    icon: Icon(Icons.account_balance_wallet_rounded),
+                    text: 'Cuentas'),
+              ],
             ),
           ),
 
-          // ── Filter chips ────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _FilterChip(
-                      label: 'Todos',
-                      selected: _filterMethod == 'todos',
-                      onTap: () => setState(() => _filterMethod = 'todos'),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    _FilterChip(
-                      label: 'Efectivo',
-                      selected: _filterMethod == 'efectivo',
-                      onTap: () => setState(() => _filterMethod = 'efectivo'),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    _FilterChip(
-                      label: 'Tarjeta',
-                      selected: _filterMethod == 'tarjeta',
-                      onTap: () => setState(() => _filterMethod = 'tarjeta'),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    _FilterChip(
-                      label: 'Transferencia',
-                      selected: _filterMethod == 'transferencia',
-                      onTap: () => setState(() => _filterMethod = 'transferencia'),
-                    ),
-                  ],
-                ),
-              ),
+          // ── Tab content ─────────────────────────────
+          Expanded(
+            child: TabBarView(
+              controller: _tabCtrl,
+              children: [
+                _buildPaymentsTab(theme, isDark, fmt),
+                _buildAccountsTab(theme, isDark, fmt),
+              ],
             ),
           ),
-
-          const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
-
-          // ── Loading / Error / Empty states ──────────────
-          if (_controller.loading)
-            const SliverFillRemaining(
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (_controller.error != null)
-            SliverFillRemaining(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.error_outline, size: 48, color: AppColors.error),
-                    const SizedBox(height: AppSpacing.md),
-                    Text(_controller.error!),
-                  ],
-                ),
-              ),
-            )
-          else if (payments.isEmpty)
-            SliverFillRemaining(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.receipt_long_rounded,
-                      size: 64,
-                      color: theme.colorScheme.onSurfaceVariant
-                          .withValues(alpha: 0.3),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Text(
-                      _searchQuery.isEmpty && _filterMethod == 'todos'
-                          ? 'Sin pagos registrados'
-                          : 'Sin resultados',
-                      style: theme.textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      'Registra el primer pago con el botón +',
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else
-            // ── Payment list ──────────────────────────────
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final p = payments[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                      child: _PaymentCard(
-                        payment: p,
-                        isDark: isDark,
-                        dateFmt: dateFmt,
-                        fmt: fmt,
-                        onDelete: () => _deletePayment(p),
-                      ),
-                    );
-                  },
-                  childCount: payments.length,
-                ),
-              ),
-            ),
-
-          // bottom padding
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'newPayment',
-        onPressed: _registerPayment,
+        onPressed: () => _registerPayment(),
         icon: const Icon(Icons.add_rounded),
         label: const Text('Registrar pago'),
       ),
     );
   }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  PAYMENTS TAB
+  // ═══════════════════════════════════════════════════════════════
+  Widget _buildPaymentsTab(ThemeData theme, bool isDark, NumberFormat fmt) {
+    final dateFmt = DateFormat('dd/MM/yyyy HH:mm', 'es');
+    final payments = _filteredPayments;
+
+    return CustomScrollView(
+      slivers: [
+        // Summary cards
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xl,
+              AppSpacing.lg,
+              AppSpacing.xl,
+              AppSpacing.sm,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _SummaryCard(
+                    icon: Icons.today_rounded,
+                    label: 'Hoy',
+                    amount: 'Q ${fmt.format(_todayTotal)}',
+                    subtitle: '$_todayCount pagos',
+                    color: AppColors.primary,
+                    isDark: isDark,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: _SummaryCard(
+                    icon: Icons.calendar_month_rounded,
+                    label: 'Este mes',
+                    amount: 'Q ${fmt.format(_monthTotal)}',
+                    subtitle:
+                        DateFormat('MMMM yyyy', 'es').format(DateTime.now()),
+                    color: AppColors.success,
+                    isDark: isDark,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // Filter chips
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _FilterChip(
+                    label: 'Todos',
+                    selected: _filterMethod == 'todos',
+                    onTap: () => setState(() => _filterMethod = 'todos'),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  _FilterChip(
+                    label: 'Efectivo',
+                    selected: _filterMethod == 'efectivo',
+                    onTap: () => setState(() => _filterMethod = 'efectivo'),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  _FilterChip(
+                    label: 'Tarjeta',
+                    selected: _filterMethod == 'tarjeta',
+                    onTap: () => setState(() => _filterMethod = 'tarjeta'),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  _FilterChip(
+                    label: 'Transferencia',
+                    selected: _filterMethod == 'transferencia',
+                    onTap: () =>
+                        setState(() => _filterMethod = 'transferencia'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+
+        const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
+
+        // States
+        if (_billingCtrl.loading)
+          const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator()))
+        else if (_billingCtrl.error != null)
+          SliverFillRemaining(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline,
+                      size: 48, color: AppColors.error),
+                  const SizedBox(height: AppSpacing.md),
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+                    child: Text(_billingCtrl.error!,
+                        textAlign: TextAlign.center),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else if (payments.isEmpty)
+          SliverFillRemaining(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.receipt_long_rounded,
+                      size: 64,
+                      color: theme.colorScheme.onSurfaceVariant
+                          .withValues(alpha: 0.3)),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    _searchQuery.isEmpty && _filterMethod == 'todos'
+                        ? 'Sin pagos registrados'
+                        : 'Sin resultados',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text('Registra el primer pago con el botón +',
+                      style: theme.textTheme.bodyMedium),
+                ],
+              ),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final p = payments[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: _PaymentCard(
+                      payment: p,
+                      isDark: isDark,
+                      dateFmt: dateFmt,
+                      fmt: fmt,
+                      onDelete: () => _deletePayment(p),
+                    ),
+                  );
+                },
+                childCount: payments.length,
+              ),
+            ),
+          ),
+
+        const SliverToBoxAdapter(child: SizedBox(height: 100)),
+      ],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  ACCOUNTS TAB
+  // ═══════════════════════════════════════════════════════════════
+  Widget _buildAccountsTab(ThemeData theme, bool isDark, NumberFormat fmt) {
+    final accounts = _patientAccounts;
+
+    final totalDeuda = accounts.fold(
+        0.0, (s, a) => s + (a.saldoPendiente > 0 ? a.saldoPendiente : 0));
+    final conDeuda = accounts.where((a) => a.saldoPendiente > 0).length;
+
+    return CustomScrollView(
+      slivers: [
+        // Top summary
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xl,
+              AppSpacing.lg,
+              AppSpacing.xl,
+              AppSpacing.md,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _SummaryCard(
+                    icon: Icons.warning_amber_rounded,
+                    label: 'Deuda total',
+                    amount: 'Q ${fmt.format(totalDeuda)}',
+                    subtitle: '$conDeuda pacientes',
+                    color: totalDeuda > 0 ? AppColors.error : AppColors.success,
+                    isDark: isDark,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: _SummaryCard(
+                    icon: Icons.people_rounded,
+                    label: 'Cuentas',
+                    amount: '${accounts.length}',
+                    subtitle: 'pacientes activos',
+                    color: AppColors.primary,
+                    isDark: isDark,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // Legend
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl, 0, AppSpacing.xl, AppSpacing.sm),
+            child: Text(
+              'Ordenado por saldo pendiente',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        ),
+
+        if (accounts.isEmpty)
+          SliverFillRemaining(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.account_balance_wallet_outlined,
+                      size: 64,
+                      color: theme.colorScheme.onSurfaceVariant
+                          .withValues(alpha: 0.3)),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    _searchQuery.isEmpty
+                        ? 'Sin cuentas por mostrar'
+                        : 'Sin resultados',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    'Las cuentas aparecen cuando se crean registros clínicos.',
+                    style: theme.textTheme.bodyMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final acc = accounts[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: _AccountCard(
+                      account: acc,
+                      isDark: isDark,
+                      fmt: fmt,
+                      onTap: () => _showAccountDetail(acc),
+                      onPay: acc.saldoPendiente > 0
+                          ? () => _registerPayment(
+                              preselectedPatientId: acc.pacienteId)
+                          : null,
+                    ),
+                  );
+                },
+                childCount: accounts.length,
+              ),
+            ),
+          ),
+
+        const SliverToBoxAdapter(child: SizedBox(height: 100)),
+      ],
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DATA MODEL
+// ═══════════════════════════════════════════════════════════════════
+
+class _PatientAccount {
+  _PatientAccount({
+    required this.pacienteId,
+    required this.pacienteNombre,
+  });
+
+  final String pacienteId;
+  final String pacienteNombre;
+  double totalCargado = 0;
+  double totalPagado = 0;
+
+  double get saldoPendiente => totalCargado - totalPagado;
+  bool get alDia => saldoPendiente <= 0;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -425,9 +919,7 @@ class _SummaryCard extends StatelessWidget {
         color: isDark ? AppColors.cardDark : AppColors.cardLight,
         borderRadius: AppSpacing.borderRadiusLg,
         boxShadow: AppTheme.cardShadow,
-        border: Border.all(
-          color: color.withValues(alpha: 0.2),
-        ),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -456,6 +948,53 @@ class _SummaryCard extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(subtitle, style: theme.textTheme.bodySmall),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  MINI STAT (used in detail sheet)
+// ═══════════════════════════════════════════════════════════════════
+
+class _MiniStat extends StatelessWidget {
+  const _MiniStat({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.isDark,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: AppSpacing.borderRadiusMd,
+        border: Border.all(color: color.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        children: [
+          Text(label,
+              style: theme.textTheme.bodySmall?.copyWith(fontSize: 10)),
+          const SizedBox(height: 2),
+          FittedBox(
+            child: Text(
+              value,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -562,7 +1101,6 @@ class _PaymentCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top row: patient name + amount
           Row(
             children: [
               Container(
@@ -581,17 +1119,14 @@ class _PaymentCard extends StatelessWidget {
                   children: [
                     Text(
                       payment.pacienteNombre,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: theme.textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w600),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      dateFmt.format(payment.fecha),
-                      style: theme.textTheme.bodySmall,
-                    ),
+                    Text(dateFmt.format(payment.fecha),
+                        style: theme.textTheme.bodySmall),
                   ],
                 ),
               ),
@@ -604,7 +1139,6 @@ class _PaymentCard extends StatelessWidget {
               ),
             ],
           ),
-          // Tags row
           const SizedBox(height: AppSpacing.sm),
           Row(
             children: [
@@ -627,16 +1161,13 @@ class _PaymentCard extends StatelessWidget {
               if (payment.notas != null && payment.notas!.isNotEmpty) ...[
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
-                  child: Text(
-                    payment.notas!,
-                    style: theme.textTheme.bodySmall,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  child: Text(payment.notas!,
+                      style: theme.textTheme.bodySmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
                 ),
               ] else
                 const Spacer(),
-              // Delete button
               SizedBox(
                 width: 32,
                 height: 32,
@@ -644,15 +1175,149 @@ class _PaymentCard extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   iconSize: 18,
                   onPressed: onDelete,
-                  icon: Icon(
-                    Icons.delete_outline_rounded,
-                    color: AppColors.error.withValues(alpha: 0.6),
-                  ),
+                  icon: Icon(Icons.delete_outline_rounded,
+                      color: AppColors.error.withValues(alpha: 0.6)),
                 ),
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  ACCOUNT CARD  (Cuentas tab)
+// ═══════════════════════════════════════════════════════════════════
+
+class _AccountCard extends StatelessWidget {
+  const _AccountCard({
+    required this.account,
+    required this.isDark,
+    required this.fmt,
+    required this.onTap,
+    this.onPay,
+  });
+
+  final _PatientAccount account;
+  final bool isDark;
+  final NumberFormat fmt;
+  final VoidCallback onTap;
+  final VoidCallback? onPay;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasDebt = account.saldoPendiente > 0;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: AppSpacing.cardPadding,
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.cardDark : AppColors.cardLight,
+          borderRadius: AppSpacing.borderRadiusLg,
+          boxShadow: AppTheme.cardShadow,
+          border: hasDebt
+              ? Border.all(color: AppColors.error.withValues(alpha: 0.2))
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor:
+                      (hasDebt ? AppColors.error : AppColors.success)
+                          .withValues(alpha: 0.12),
+                  child: Text(
+                    account.pacienteNombre.isNotEmpty
+                        ? account.pacienteNombre[0].toUpperCase()
+                        : '?',
+                    style: TextStyle(
+                      color: hasDebt ? AppColors.error : AppColors.success,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        account.pacienteNombre,
+                        style: theme.textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Cargado: Q ${fmt.format(account.totalCargado)} · '
+                        'Pagado: Q ${fmt.format(account.totalPagado)}',
+                        style:
+                            theme.textTheme.bodySmall?.copyWith(fontSize: 11),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: (hasDebt ? AppColors.error : AppColors.success)
+                        .withValues(alpha: 0.1),
+                    borderRadius: AppSpacing.borderRadiusSm,
+                  ),
+                  child: Text(
+                    hasDebt
+                        ? 'Pendiente: Q ${fmt.format(account.saldoPendiente)}'
+                        : 'Al día ✓',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: hasDebt ? AppColors.error : AppColors.success,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                if (onPay != null)
+                  SizedBox(
+                    height: 30,
+                    child: TextButton.icon(
+                      onPressed: onPay,
+                      icon: const Icon(Icons.payments_rounded, size: 14),
+                      label:
+                          const Text('Abonar', style: TextStyle(fontSize: 12)),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.sm),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: AppSpacing.xs),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: theme.colorScheme.onSurfaceVariant
+                      .withValues(alpha: 0.4),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -679,9 +1344,13 @@ class _PaymentFormResult {
 }
 
 class _PaymentFormSheet extends StatefulWidget {
-  const _PaymentFormSheet({required this.patients});
+  const _PaymentFormSheet({
+    required this.patients,
+    this.preselectedPatientId,
+  });
 
   final List<Patient> patients;
+  final String? preselectedPatientId;
 
   @override
   State<_PaymentFormSheet> createState() => _PaymentFormSheetState();
@@ -691,6 +1360,7 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
   final _formKey = GlobalKey<FormState>();
   final _montoCtrl = TextEditingController();
   final _notasCtrl = TextEditingController();
+  late final TextEditingController _patientSearchCtrl;
 
   Patient? _selectedPatient;
   String _metodoPago = 'efectivo';
@@ -702,9 +1372,25 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
   };
 
   @override
+  void initState() {
+    super.initState();
+    _patientSearchCtrl = TextEditingController();
+    if (widget.preselectedPatientId != null) {
+      final match = widget.patients
+          .where((p) => p.id == widget.preselectedPatientId)
+          .toList();
+      if (match.isNotEmpty) {
+        _selectedPatient = match.first;
+        _patientSearchCtrl.text = match.first.nombre;
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _montoCtrl.dispose();
     _notasCtrl.dispose();
+    _patientSearchCtrl.dispose();
     super.dispose();
   }
 
@@ -745,7 +1431,7 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Handle bar ────────────────────────
+                // Handle bar
                 Center(
                   child: Container(
                     width: 40,
@@ -758,8 +1444,7 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
                     ),
                   ),
                 ),
-
-                // ── Title ─────────────────────────────
+                // Title
                 Row(
                   children: [
                     Container(
@@ -769,25 +1454,18 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
                         gradient: AppColors.primaryGradient,
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(
-                        Icons.payments_rounded,
-                        color: Colors.white,
-                        size: 22,
-                      ),
+                      child: const Icon(Icons.payments_rounded,
+                          color: Colors.white, size: 22),
                     ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Registrar pago',
-                            style: theme.textTheme.titleLarge,
-                          ),
-                          Text(
-                            'Ingresá los datos del cobro',
-                            style: theme.textTheme.bodyMedium,
-                          ),
+                          Text('Registrar pago',
+                              style: theme.textTheme.titleLarge),
+                          Text('Ingresá los datos del cobro',
+                              style: theme.textTheme.bodyMedium),
                         ],
                       ),
                     ),
@@ -797,17 +1475,17 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
                 const Divider(),
                 const SizedBox(height: AppSpacing.lg),
 
-                // ── Patient picker ────────────────────
+                // Patient picker
                 Text('Paciente', style: theme.textTheme.titleSmall),
                 const SizedBox(height: AppSpacing.sm),
                 Autocomplete<Patient>(
+                  initialValue: _patientSearchCtrl.value,
                   displayStringForOption: (p) => p.nombre,
                   optionsBuilder: (textEditingValue) {
                     final q = textEditingValue.text.trim().toLowerCase();
                     if (q.isEmpty) return widget.patients;
-                    return widget.patients.where(
-                      (p) => p.nombre.toLowerCase().contains(q),
-                    );
+                    return widget.patients
+                        .where((p) => p.nombre.toLowerCase().contains(q));
                   },
                   onSelected: (p) => setState(() => _selectedPatient = p),
                   fieldViewBuilder:
@@ -868,7 +1546,7 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
 
-                // ── Amount ────────────────────────────
+                // Amount
                 TextFormField(
                   controller: _montoCtrl,
                   keyboardType:
@@ -891,7 +1569,7 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
 
-                // ── Payment method ────────────────────
+                // Payment method
                 Text('Método de pago', style: theme.textTheme.titleSmall),
                 const SizedBox(height: AppSpacing.sm),
                 SegmentedButton<String>(
@@ -916,7 +1594,7 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
 
-                // ── Notes ─────────────────────────────
+                // Notes
                 TextFormField(
                   controller: _notasCtrl,
                   maxLines: 2,
@@ -929,7 +1607,7 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
                 ),
                 const SizedBox(height: AppSpacing.xl),
 
-                // ── Actions ───────────────────────────
+                // Actions
                 Row(
                   children: [
                     Expanded(

@@ -13,6 +13,17 @@ class ClinicalRecordFirestoreDataSource {
   CollectionReference<Map<String, dynamic>> get _col =>
       _firestore.collection('registros_clinicos');
 
+  /// Real-time stream of ALL records, newest first.
+  Stream<List<ClinicalRecord>> observeAll() {
+    return _col.snapshots().map((snap) {
+      final list = snap.docs
+          .map((d) => ClinicalRecord.fromFirestore(d.id, d.data()))
+          .toList()
+        ..sort((a, b) => b.fecha.compareTo(a.fecha));
+      return list;
+    });
+  }
+
   /// Real-time stream of records for a patient, newest first.
   Stream<List<ClinicalRecord>> observeByPatient(String pacienteId) {
     return _col

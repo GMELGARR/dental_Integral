@@ -9,6 +9,9 @@ class ClinicalRecordRepositoryImpl implements ClinicalRecordRepository {
   final ClinicalRecordFirestoreDataSource _ds;
 
   @override
+  Stream<List<ClinicalRecord>> observeAll() => _ds.observeAll();
+
+  @override
   Stream<List<ClinicalRecord>> observeByPatient(String pacienteId) =>
       _ds.observeByPatient(pacienteId);
 

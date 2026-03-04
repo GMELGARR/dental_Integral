@@ -62,6 +62,7 @@ import '../../features/clinical_records/data/repositories/clinical_record_reposi
 import '../../features/clinical_records/domain/repositories/clinical_record_repository.dart';
 import '../../features/clinical_records/domain/usecases/create_clinical_record.dart';
 import '../../features/clinical_records/domain/usecases/get_clinical_record_by_appointment.dart';
+import '../../features/clinical_records/domain/usecases/observe_all_clinical_records.dart';
 import '../../features/clinical_records/domain/usecases/observe_clinical_records_by_patient.dart';
 import '../../features/clinical_records/presentation/controllers/clinical_record_controller.dart';
 import '../../features/auth/data/datasources/firebase_auth_data_source.dart';
@@ -492,6 +493,12 @@ Future<void> setupDependencies() async {
     if (!getIt.isRegistered<CreateClinicalRecord>()) {
       getIt.registerLazySingleton<CreateClinicalRecord>(
         () => CreateClinicalRecord(getIt<ClinicalRecordRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<ObserveAllClinicalRecords>()) {
+      getIt.registerLazySingleton<ObserveAllClinicalRecords>(
+        () => ObserveAllClinicalRecords(getIt<ClinicalRecordRepository>()),
       );
     }
 

@@ -3,6 +3,9 @@ import '../entities/material_utilizado.dart';
 import '../entities/tratamiento_realizado.dart';
 
 abstract class ClinicalRecordRepository {
+  /// Real-time stream of all clinical records.
+  Stream<List<ClinicalRecord>> observeAll();
+
   /// Real-time stream of clinical records for a specific patient.
   Stream<List<ClinicalRecord>> observeByPatient(String pacienteId);
 
