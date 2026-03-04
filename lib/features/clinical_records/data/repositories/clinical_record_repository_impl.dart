@@ -1,4 +1,5 @@
 import '../../domain/entities/clinical_record.dart';
+import '../../domain/entities/material_utilizado.dart';
 import '../../domain/entities/tratamiento_realizado.dart';
 import '../../domain/repositories/clinical_record_repository.dart';
 import '../datasources/clinical_record_firestore_data_source.dart';
@@ -34,6 +35,7 @@ class ClinicalRecordRepositoryImpl implements ClinicalRecordRepository {
     String? indicaciones,
     String? proximaCitaSugerida,
     String? notaCargoExtra,
+    List<MaterialUtilizado> materialesUtilizados = const [],
   }) =>
       _ds.create(
         citaId: citaId,
@@ -53,5 +55,6 @@ class ClinicalRecordRepositoryImpl implements ClinicalRecordRepository {
         indicaciones: indicaciones,
         proximaCitaSugerida: proximaCitaSugerida,
         notaCargoExtra: notaCargoExtra,
+        materialesUtilizados: materialesUtilizados,
       );
 }

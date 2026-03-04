@@ -15,6 +15,7 @@ import '../../features/treatments/presentation/pages/treatment_management_page.d
 import '../../features/inventory/presentation/pages/inventory_management_page.dart';
 import '../../features/patients/presentation/pages/patients_page.dart';
 import '../../features/appointments/presentation/pages/appointments_page.dart';
+import '../../features/billing/presentation/pages/billing_page.dart';
 import '../di/service_locator.dart';
 import '../../features/home/presentation/pages/home_page.dart';
 
@@ -87,6 +88,11 @@ class AppRouter {
         path: '/appointments',
         name: 'appointments',
         builder: (context, state) => const AppointmentsPage(),
+      ),
+      GoRoute(
+        path: '/billing',
+        name: 'billing',
+        builder: (context, state) => const BillingPage(),
       ),
     ],
     redirect: (context, state) {

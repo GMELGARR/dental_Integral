@@ -49,6 +49,14 @@ import '../../features/appointments/domain/usecases/create_appointment.dart';
 import '../../features/appointments/domain/usecases/observe_appointments.dart';
 import '../../features/appointments/domain/usecases/update_appointment.dart';
 import '../../features/appointments/presentation/controllers/appointment_controller.dart';
+import '../../features/billing/data/datasources/payment_firestore_data_source.dart';
+import '../../features/billing/data/repositories/payment_repository_impl.dart';
+import '../../features/billing/domain/repositories/payment_repository.dart';
+import '../../features/billing/domain/usecases/create_payment.dart';
+import '../../features/billing/domain/usecases/delete_payment.dart';
+import '../../features/billing/domain/usecases/observe_all_payments.dart';
+import '../../features/billing/domain/usecases/observe_payments_by_patient.dart';
+import '../../features/billing/presentation/controllers/billing_controller.dart';
 import '../../features/clinical_records/data/datasources/clinical_record_firestore_data_source.dart';
 import '../../features/clinical_records/data/repositories/clinical_record_repository_impl.dart';
 import '../../features/clinical_records/domain/repositories/clinical_record_repository.dart';
@@ -416,6 +424,54 @@ Future<void> setupDependencies() async {
           createAppointment: getIt<CreateAppointment>(),
           updateAppointment: getIt<UpdateAppointment>(),
           repository: getIt<AppointmentRepository>(),
+        ),
+      );
+    }
+
+    // ── Billing / Payments ──────────────────────────────────────────
+    if (!getIt.isRegistered<PaymentFirestoreDataSource>()) {
+      getIt.registerLazySingleton<PaymentFirestoreDataSource>(
+        () => PaymentFirestoreDataSource(getIt<FirebaseFirestore>()),
+      );
+    }
+
+    if (!getIt.isRegistered<PaymentRepository>()) {
+      getIt.registerLazySingleton<PaymentRepository>(
+        () => PaymentRepositoryImpl(getIt<PaymentFirestoreDataSource>()),
+      );
+    }
+
+    if (!getIt.isRegistered<ObserveAllPayments>()) {
+      getIt.registerLazySingleton<ObserveAllPayments>(
+        () => ObserveAllPayments(getIt<PaymentRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<ObservePaymentsByPatient>()) {
+      getIt.registerLazySingleton<ObservePaymentsByPatient>(
+        () => ObservePaymentsByPatient(getIt<PaymentRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<CreatePayment>()) {
+      getIt.registerLazySingleton<CreatePayment>(
+        () => CreatePayment(getIt<PaymentRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<DeletePayment>()) {
+      getIt.registerLazySingleton<DeletePayment>(
+        () => DeletePayment(getIt<PaymentRepository>()),
+      );
+    }
+
+    if (!getIt.isRegistered<BillingController>()) {
+      getIt.registerFactory<BillingController>(
+        () => BillingController(
+          observeAll: getIt<ObserveAllPayments>(),
+          observeByPatient: getIt<ObservePaymentsByPatient>(),
+          createPayment: getIt<CreatePayment>(),
+          deletePayment: getIt<DeletePayment>(),
         ),
       );
     }

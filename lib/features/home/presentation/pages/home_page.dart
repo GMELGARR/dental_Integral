@@ -301,13 +301,7 @@ class _HomePageState extends State<HomePage> {
                     iconGradient: const LinearGradient(
                       colors: [Color(0xFF00897B), Color(0xFF4DB6AC)],
                     ),
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Módulo en desarrollo.'),
-                        ),
-                      );
-                    },
+                    onTap: () => context.push('/billing'),
                   ),
                   const SizedBox(height: AppSpacing.md),
                 ],

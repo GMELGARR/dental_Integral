@@ -1,4 +1,5 @@
 import '../entities/clinical_record.dart';
+import '../entities/material_utilizado.dart';
 import '../entities/tratamiento_realizado.dart';
 
 abstract class ClinicalRecordRepository {
@@ -27,5 +28,6 @@ abstract class ClinicalRecordRepository {
     String? indicaciones,
     String? proximaCitaSugerida,
     String? notaCargoExtra,
+    List<MaterialUtilizado> materialesUtilizados = const [],
   });
 }

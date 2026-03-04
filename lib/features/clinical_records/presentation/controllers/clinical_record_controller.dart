@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../../core/errors/app_exception.dart';
 import '../../domain/entities/clinical_record.dart';
+import '../../domain/entities/material_utilizado.dart';
 import '../../domain/entities/tratamiento_realizado.dart';
 import '../../domain/usecases/create_clinical_record.dart';
 import '../../domain/usecases/get_clinical_record_by_appointment.dart';
@@ -86,6 +87,7 @@ class ClinicalRecordController extends ChangeNotifier {
     String? indicaciones,
     String? proximaCitaSugerida,
     String? notaCargoExtra,
+    List<MaterialUtilizado> materialesUtilizados = const [],
   }) async {
     _isSaving = true;
     _errorMessage = null;
@@ -110,6 +112,7 @@ class ClinicalRecordController extends ChangeNotifier {
         indicaciones: indicaciones,
         proximaCitaSugerida: proximaCitaSugerida,
         notaCargoExtra: notaCargoExtra,
+        materialesUtilizados: materialesUtilizados,
       );
       return true;
     } on AppException catch (e) {

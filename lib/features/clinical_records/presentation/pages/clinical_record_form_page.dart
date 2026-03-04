@@ -6,8 +6,11 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/gradient_header.dart';
 import '../../../appointments/domain/entities/appointment.dart';
+import '../../../inventory/domain/entities/inventory_item.dart';
+import '../../../inventory/presentation/controllers/inventory_controller.dart';
 import '../../../treatments/domain/entities/treatment.dart';
 import '../../../treatments/presentation/controllers/treatment_controller.dart';
+import '../../domain/entities/material_utilizado.dart';
 import '../../domain/entities/tratamiento_realizado.dart';
 import '../controllers/clinical_record_controller.dart';
 
@@ -26,6 +29,7 @@ class _ClinicalRecordFormPageState extends State<ClinicalRecordFormPage> {
 
   late final ClinicalRecordController _controller;
   late final TreatmentController _treatmentController;
+  late final InventoryController _inventoryController;
 
   // ── Text controllers ────────────────────────────────────────
   final _diagnosticoCtrl = TextEditingController();
@@ -39,6 +43,9 @@ class _ClinicalRecordFormPageState extends State<ClinicalRecordFormPage> {
 
   // ── Cart state ──────────────────────────────────────────────
   final List<TratamientoRealizado> _cart = [];
+
+  // ── Materials cart (optional) ───────────────────────────────
+  final List<MaterialUtilizado> _materialsCart = [];
 
   // ── Autocomplete references ────────────────────────────────
   FocusNode? _autocompleteFocusNode;
@@ -65,6 +72,7 @@ class _ClinicalRecordFormPageState extends State<ClinicalRecordFormPage> {
     super.initState();
     _controller = getIt<ClinicalRecordController>();
     _treatmentController = getIt<TreatmentController>();
+    _inventoryController = getIt<InventoryController>();
   }
 
   @override
@@ -79,6 +87,7 @@ class _ClinicalRecordFormPageState extends State<ClinicalRecordFormPage> {
     _notaCargoExtraCtrl.dispose();
     _controller.dispose();
     _treatmentController.dispose();
+    _inventoryController.dispose();
     super.dispose();
   }
 
@@ -119,6 +128,39 @@ class _ClinicalRecordFormPageState extends State<ClinicalRecordFormPage> {
   void _updatePrice(int index, double newPrice) {
     setState(() {
       _cart[index] = _cart[index].copyWith(precioUnitario: newPrice);
+    });
+  }
+
+  // ── Material cart helpers ─────────────────────────────────────
+  void _addMaterial(InventoryItem item) {
+    final idx =
+        _materialsCart.indexWhere((m) => m.materialId == item.id);
+    if (idx >= 0) {
+      setState(() {
+        _materialsCart[idx] = _materialsCart[idx]
+            .copyWith(cantidad: _materialsCart[idx].cantidad + 1);
+      });
+    } else {
+      setState(() {
+        _materialsCart.add(MaterialUtilizado(
+          materialId: item.id,
+          nombre: item.nombre,
+          unidad: item.unidad,
+        ));
+      });
+    }
+  }
+
+  void _removeMaterial(int index) {
+    setState(() => _materialsCart.removeAt(index));
+  }
+
+  void _updateMaterialQty(int index, int delta) {
+    final current = _materialsCart[index].cantidad + delta;
+    if (current < 1) return;
+    setState(() {
+      _materialsCart[index] =
+          _materialsCart[index].copyWith(cantidad: current);
     });
   }
 
@@ -164,10 +206,19 @@ class _ClinicalRecordFormPageState extends State<ClinicalRecordFormPage> {
       notaCargoExtra: _notaCargoExtraCtrl.text.trim().isEmpty
           ? null
           : _notaCargoExtraCtrl.text.trim(),
+      materialesUtilizados: _materialsCart,
     );
 
     if (!mounted) return;
     if (ok) {
+      // Deduct inventory stock for each material used.
+      for (final mat in _materialsCart) {
+        await _inventoryController.adjust(
+          id: mat.materialId,
+          delta: -mat.cantidad,
+        );
+      }
+      if (!mounted) return;
       Navigator.of(context).pop(true); // signal success
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -276,6 +327,15 @@ class _ClinicalRecordFormPageState extends State<ClinicalRecordFormPage> {
                       _buildTreatmentPicker(isDark),
                       const SizedBox(height: AppSpacing.sm),
                       ..._buildCartItems(isDark),
+
+                      const SizedBox(height: AppSpacing.xl),
+
+                      // ── Materiales utilizados (opcional) ───
+                      _SectionLabel('Materiales utilizados (opcional)'),
+                      const SizedBox(height: AppSpacing.sm),
+                      _buildMaterialPicker(isDark),
+                      const SizedBox(height: AppSpacing.sm),
+                      ..._buildMaterialItems(isDark),
 
                       const SizedBox(height: AppSpacing.lg),
 
@@ -566,6 +626,160 @@ class _ClinicalRecordFormPageState extends State<ClinicalRecordFormPage> {
                   ),
                 ),
               ],
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  // ── Material picker (autocomplete) ─────────────────────────────
+  Widget _buildMaterialPicker(bool isDark) {
+    return AnimatedBuilder(
+      animation: _inventoryController,
+      builder: (context, _) {
+        if (_inventoryController.isLoading) {
+          return const LinearProgressIndicator();
+        }
+
+        final available = _inventoryController.items
+            .where((i) => i.activo && i.stockActual > 0)
+            .toList();
+
+        return Autocomplete<InventoryItem>(
+          displayStringForOption: (i) => i.nombre,
+          optionsBuilder: (textEditingValue) {
+            if (textEditingValue.text.isEmpty) return available;
+            final q = textEditingValue.text.toLowerCase();
+            return available
+                .where((i) => i.nombre.toLowerCase().contains(q));
+          },
+          onSelected: (item) => _addMaterial(item),
+          fieldViewBuilder: (ctx, textCtrl, focusNode, onSubmitted) {
+            return TextFormField(
+              controller: textCtrl,
+              focusNode: focusNode,
+              decoration: const InputDecoration(
+                hintText: 'Buscar material del inventario...',
+                prefixIcon: Icon(Icons.inventory_2_outlined, size: 20),
+              ),
+            );
+          },
+          optionsViewBuilder: (ctx, onSelected, options) {
+            return Align(
+              alignment: Alignment.topLeft,
+              child: Material(
+                elevation: 4,
+                borderRadius: AppSpacing.borderRadiusMd,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  child: ListView.builder(
+                    padding: EdgeInsets.zero,
+                    shrinkWrap: true,
+                    itemCount: options.length,
+                    itemBuilder: (_, i) {
+                      final item = options.elementAt(i);
+                      return ListTile(
+                        dense: true,
+                        title: Text(item.nombre),
+                        subtitle: Text(
+                          'Stock: ${item.stockActual} ${item.unidad}',
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        trailing: Icon(
+                          item.stockBajo
+                              ? Icons.warning_amber_rounded
+                              : Icons.check_circle_outline,
+                          size: 18,
+                          color: item.stockBajo
+                              ? AppColors.warning
+                              : AppColors.success,
+                        ),
+                        onTap: () => onSelected(item),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ── Material cart list ────────────────────────────────────────
+  List<Widget> _buildMaterialItems(bool isDark) {
+    if (_materialsCart.isEmpty) return const [];
+
+    return List.generate(_materialsCart.length, (i) {
+      final mat = _materialsCart[i];
+      return Container(
+        margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.cardDark : Colors.white,
+          borderRadius: AppSpacing.borderRadiusMd,
+          border: Border.all(
+            color: isDark ? AppColors.dividerDark : AppColors.dividerLight,
+          ),
+        ),
+        child: Row(
+          children: [
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    mat.nombre,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  Text(
+                    mat.unidad,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark
+                          ? AppColors.textTertiaryDark
+                          : AppColors.textTertiaryLight,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Quantity controls
+            IconButton(
+              icon: const Icon(Icons.remove_circle_outline, size: 20),
+              onPressed: () => _updateMaterialQty(i, -1),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            ),
+            SizedBox(
+              width: 28,
+              child: Text(
+                '${mat.cantidad}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.add_circle_outline, size: 20),
+              onPressed: () => _updateMaterialQty(i, 1),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            ),
+
+            // Delete
+            IconButton(
+              icon: Icon(Icons.delete_outline,
+                  size: 20, color: AppColors.error),
+              onPressed: () => _removeMaterial(i),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             ),
           ],
         ),

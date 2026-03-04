@@ -1,3 +1,4 @@
+import 'material_utilizado.dart';
 import 'tratamiento_realizado.dart';
 
 /// A clinical record created when an appointment is completed.
@@ -15,6 +16,7 @@ class ClinicalRecord {
     required this.descuentoMonto,
     required this.cargoExtra,
     required this.costoTotal,
+    this.materialesUtilizados = const [],
     this.diagnostico,
     this.notasClinicas,
     this.indicaciones,
@@ -49,6 +51,9 @@ class ClinicalRecord {
   // ── Treatment cart ───────────────────────────────────────────
   final List<TratamientoRealizado> tratamientos;
 
+  // ── Materials consumed (optional) ────────────────────────────
+  final List<MaterialUtilizado> materialesUtilizados;
+
   /// Sum of tratamiento subtotals before discount/extra.
   final double subtotal;
 
@@ -74,6 +79,12 @@ class ClinicalRecord {
             .toList() ??
         const [];
 
+    final mats = (data['materialesUtilizados'] as List<dynamic>?)
+            ?.map((e) =>
+                MaterialUtilizado.fromMap(e as Map<String, dynamic>))
+            .toList() ??
+        const [];
+
     return ClinicalRecord(
       id: id,
       citaId: data['citaId'] as String? ?? '',
@@ -88,6 +99,7 @@ class ClinicalRecord {
       indicaciones: data['indicaciones'] as String?,
       proximaCitaSugerida: data['proximaCitaSugerida'] as String?,
       tratamientos: items,
+      materialesUtilizados: mats,
       subtotal: (data['subtotal'] as num?)?.toDouble() ?? 0,
       descuentoMonto:
           (data['descuentoMonto'] as num?)?.toDouble() ?? 0,

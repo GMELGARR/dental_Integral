@@ -446,6 +446,42 @@ class _RecordCard extends StatelessWidget {
                   const SizedBox(height: AppSpacing.lg),
                 ],
 
+                // Materiales utilizados
+                if (r.materialesUtilizados.isNotEmpty) ...[
+                  Row(
+                    children: [
+                      Icon(Icons.inventory_2_outlined,
+                          size: 18, color: AppColors.primary),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        'Materiales utilizados',
+                        style: theme.textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  ...r.materialesUtilizados.map((m) => Padding(
+                        padding: const EdgeInsets.only(
+                            bottom: AppSpacing.xs, left: 26),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(m.nombre,
+                                  style: theme.textTheme.bodySmall),
+                            ),
+                            Text(
+                              '${m.cantidad} ${m.unidad}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+
                 // Notas
                 if (_hasText(r.notasClinicas))
                   _DetailSection(

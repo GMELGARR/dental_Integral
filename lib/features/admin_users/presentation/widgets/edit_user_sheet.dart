@@ -56,16 +56,17 @@ class _EditUserSheetState extends State<EditUserSheet> {
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(
+        padding: EdgeInsets.fromLTRB(
           AppSpacing.xxl,
           AppSpacing.sm,
           AppSpacing.xxl,
-          AppSpacing.xxl,
+          MediaQuery.of(context).viewInsets.bottom + AppSpacing.xxl,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             // ── User header ──────────────────────────
             Row(
               children: [
@@ -213,7 +214,7 @@ class _EditUserSheetState extends State<EditUserSheet> {
               ],
             ),
           ],
-        ),
+        ),        ),
       ),
     );
   }

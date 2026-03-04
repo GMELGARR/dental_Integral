@@ -1,3 +1,4 @@
+import '../entities/material_utilizado.dart';
 import '../entities/tratamiento_realizado.dart';
 import '../repositories/clinical_record_repository.dart';
 
@@ -23,6 +24,7 @@ class CreateClinicalRecord {
     String? indicaciones,
     String? proximaCitaSugerida,
     String? notaCargoExtra,
+    List<MaterialUtilizado> materialesUtilizados = const [],
   }) =>
       _repo.create(
         citaId: citaId,
@@ -42,5 +44,6 @@ class CreateClinicalRecord {
         indicaciones: indicaciones,
         proximaCitaSugerida: proximaCitaSugerida,
         notaCargoExtra: notaCargoExtra,
+        materialesUtilizados: materialesUtilizados,
       );
 }

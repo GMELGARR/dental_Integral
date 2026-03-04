@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../core/errors/app_exception.dart';
 import '../../domain/entities/clinical_record.dart';
+import '../../domain/entities/material_utilizado.dart';
 import '../../domain/entities/tratamiento_realizado.dart';
 
 class ClinicalRecordFirestoreDataSource {
@@ -53,6 +54,7 @@ class ClinicalRecordFirestoreDataSource {
     String? indicaciones,
     String? proximaCitaSugerida,
     String? notaCargoExtra,
+    List<MaterialUtilizado> materialesUtilizados = const [],
   }) async {
     try {
       await _col.add({
@@ -74,6 +76,9 @@ class ClinicalRecordFirestoreDataSource {
         'cargoExtra': cargoExtra,
         'notaCargoExtra': notaCargoExtra,
         'costoTotal': costoTotal,
+        if (materialesUtilizados.isNotEmpty)
+          'materialesUtilizados':
+              materialesUtilizados.map((m) => m.toMap()).toList(),
         'creadoEn': FieldValue.serverTimestamp(),
       });
     } catch (error) {
