@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../app/di/service_locator.dart';
+import '../../../../core/services/pdf_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -46,6 +47,23 @@ class _ReportsPageState extends State<ReportsPage>
     super.dispose();
   }
 
+  Future<void> _exportReport() async {
+    final data = _ctrl.data;
+    if (data == null) return;
+
+    try {
+      await PdfService.instance.generateAndShareReport(data);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al exportar: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -64,6 +82,15 @@ class _ReportsPageState extends State<ReportsPage>
                   children: [
                     BackButton(color: Colors.white),
                     const Spacer(),
+                    IconButton(
+                      onPressed: _ctrl.data != null
+                          ? () => _exportReport()
+                          : null,
+                      tooltip: 'Exportar PDF',
+                      icon: Icon(Icons.picture_as_pdf_rounded,
+                          color: Colors.white
+                              .withValues(alpha: _ctrl.data != null ? 1.0 : 0.4)),
+                    ),
                     IconButton(
                       onPressed: _ctrl.refresh,
                       tooltip: 'Actualizar',

@@ -3,10 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../app/di/service_locator.dart';
+import '../../../../core/services/pdf_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/gradient_header.dart';
 import '../../../appointments/domain/entities/appointment.dart';
+import '../../../billing/domain/entities/payment.dart';
 import '../../../billing/presentation/controllers/billing_controller.dart';
 import '../../../inventory/domain/entities/inventory_item.dart';
 import '../../../inventory/presentation/controllers/inventory_controller.dart';
@@ -224,7 +226,7 @@ class _ClinicalRecordFormPageState extends State<ClinicalRecordFormPage> {
 
       // ── Quick-pay prompt ────────────────────────────────────
       final apptForPay = widget.appointment;
-      final paid = await showModalBottomSheet<bool>(
+      final paymentResult = await showModalBottomSheet<Payment>(
         context: context,
         isScrollControlled: true,
         shape: const RoundedRectangleBorder(
@@ -240,15 +242,50 @@ class _ClinicalRecordFormPageState extends State<ClinicalRecordFormPage> {
 
       if (!mounted) return;
 
-      if (paid == true) {
+      if (paymentResult != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Pago registrado correctamente.'),
             backgroundColor: AppColors.success,
           ),
         );
+
+        // Offer to share receipt via WhatsApp / etc.
+        final share = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            icon: const Icon(Icons.receipt_long_rounded,
+                color: AppColors.primary, size: 36),
+            title: const Text('¿Compartir recibo?'),
+            content: const Text(
+              'Puede enviar el recibo de pago por WhatsApp u otra app.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('No, gracias'),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(ctx, true),
+                icon: const Icon(Icons.share_rounded, size: 18),
+                label: const Text('Compartir'),
+              ),
+            ],
+          ),
+        );
+
+        if (share == true) {
+          if (!mounted) return;
+          try {
+            await PdfService.instance
+                .generateAndShareReceipt(paymentResult);
+          } catch (_) {
+            // Silently ignore share errors.
+          }
+        }
       }
 
+      if (!mounted) return;
       Navigator.of(context).pop(true); // signal success
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1103,7 +1140,21 @@ class _QuickPaymentSheetState extends State<_QuickPaymentSheet> {
 
     if (!mounted) return;
     setState(() => _saving = false);
-    Navigator.of(context).pop(ok);
+
+    if (ok) {
+      // Return a Payment object for receipt generation.
+      Navigator.of(context).pop(Payment(
+        id: DateTime.now().millisecondsSinceEpoch.toRadixString(36),
+        pacienteId: widget.pacienteId,
+        pacienteNombre: widget.pacienteNombre,
+        monto: monto,
+        metodoPago: _metodoPago,
+        fecha: DateTime.now(),
+        notas: _notasCtrl.text.trim().isEmpty ? null : _notasCtrl.text.trim(),
+      ));
+    } else {
+      Navigator.of(context).pop(null);
+    }
   }
 
   @override
@@ -1317,7 +1368,7 @@ class _QuickPaymentSheetState extends State<_QuickPaymentSheet> {
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed:
-                            _saving ? null : () => Navigator.of(context).pop(false),
+                            _saving ? null : () => Navigator.of(context).pop(null),
                         icon: const Icon(Icons.schedule_rounded, size: 18),
                         label: const Text('Cobrar después'),
                         style: OutlinedButton.styleFrom(

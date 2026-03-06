@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../app/di/service_locator.dart';
+import '../../../../core/services/pdf_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -191,6 +192,21 @@ class _BillingPageState extends State<BillingPage>
         backgroundColor: ok ? AppColors.success : AppColors.error,
       ),
     );
+  }
+
+  // ── Share receipt ────────────────────────────────────────────
+  Future<void> _shareReceipt(Payment payment) async {
+    try {
+      await PdfService.instance.generateAndShareReceipt(payment);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al generar recibo: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   // ── Delete payment ──────────────────────────────────────────
@@ -737,6 +753,7 @@ class _BillingPageState extends State<BillingPage>
                       dateFmt: dateFmt,
                       fmt: fmt,
                       onDelete: () => _deletePayment(p),
+                      onShare: () => _shareReceipt(p),
                     ),
                   );
                 },
@@ -1056,6 +1073,7 @@ class _PaymentCard extends StatelessWidget {
     required this.dateFmt,
     required this.fmt,
     required this.onDelete,
+    required this.onShare,
   });
 
   final Payment payment;
@@ -1063,6 +1081,7 @@ class _PaymentCard extends StatelessWidget {
   final DateFormat dateFmt;
   final NumberFormat fmt;
   final VoidCallback onDelete;
+  final VoidCallback onShare;
 
   IconData _methodIcon() {
     switch (payment.metodoPago) {
@@ -1174,6 +1193,20 @@ class _PaymentCard extends StatelessWidget {
                 child: IconButton(
                   padding: EdgeInsets.zero,
                   iconSize: 18,
+                  tooltip: 'Compartir recibo',
+                  onPressed: onShare,
+                  icon: Icon(Icons.share_rounded,
+                      color: AppColors.primary.withValues(alpha: 0.7)),
+                ),
+              ),
+              const SizedBox(width: 4),
+              SizedBox(
+                width: 32,
+                height: 32,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  iconSize: 18,
+                  tooltip: 'Eliminar',
                   onPressed: onDelete,
                   icon: Icon(Icons.delete_outline_rounded,
                       color: AppColors.error.withValues(alpha: 0.6)),
