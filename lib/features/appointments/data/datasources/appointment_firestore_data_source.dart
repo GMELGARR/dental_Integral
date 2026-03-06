@@ -104,6 +104,13 @@ class AppointmentFirestoreDataSource {
     String? pacienteId,
     String? pacienteNombre,
     String? pacienteTelefono,
+    DateTime? fecha,
+    String? odontologoId,
+    String? odontologoNombre,
+    int? duracionMinutos,
+    String? tipo,
+    String? nombreTemporal,
+    String? telefonoTemporal,
   }) async {
     final data = <String, dynamic>{
       'actualizadoEn': FieldValue.serverTimestamp(),
@@ -115,6 +122,13 @@ class AppointmentFirestoreDataSource {
     if (pacienteId != null) data['pacienteId'] = pacienteId;
     if (pacienteNombre != null) data['pacienteNombre'] = pacienteNombre;
     if (pacienteTelefono != null) data['pacienteTelefono'] = pacienteTelefono;
+    if (fecha != null) data['fecha'] = Timestamp.fromDate(fecha);
+    if (odontologoId != null) data['odontologoId'] = odontologoId;
+    if (odontologoNombre != null) data['odontologoNombre'] = odontologoNombre;
+    if (duracionMinutos != null) data['duracionMinutos'] = duracionMinutos;
+    if (tipo != null) data['tipo'] = tipo;
+    if (nombreTemporal != null) data['nombreTemporal'] = nombreTemporal;
+    if (telefonoTemporal != null) data['telefonoTemporal'] = telefonoTemporal;
 
     await _col.doc(id).update(data);
   }

@@ -39,5 +39,12 @@ abstract class AppointmentRepository {
     String? pacienteId,
     String? pacienteNombre,
     String? pacienteTelefono,
+    DateTime? fecha,
+    String? odontologoId,
+    String? odontologoNombre,
+    int? duracionMinutos,
+    String? tipo,
+    String? nombreTemporal,
+    String? telefonoTemporal,
   });
 }

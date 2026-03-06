@@ -13,6 +13,13 @@ class UpdateAppointment {
     String? pacienteId,
     String? pacienteNombre,
     String? pacienteTelefono,
+    DateTime? fecha,
+    String? odontologoId,
+    String? odontologoNombre,
+    int? duracionMinutos,
+    String? tipo,
+    String? nombreTemporal,
+    String? telefonoTemporal,
   }) =>
       _repo.update(
         id: id,
@@ -23,5 +30,12 @@ class UpdateAppointment {
         pacienteId: pacienteId,
         pacienteNombre: pacienteNombre,
         pacienteTelefono: pacienteTelefono,
+        fecha: fecha,
+        odontologoId: odontologoId,
+        odontologoNombre: odontologoNombre,
+        duracionMinutos: duracionMinutos,
+        tipo: tipo,
+        nombreTemporal: nombreTemporal,
+        telefonoTemporal: telefonoTemporal,
       );
 }

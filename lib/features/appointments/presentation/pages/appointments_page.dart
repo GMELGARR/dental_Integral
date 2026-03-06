@@ -184,6 +184,43 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     );
   }
 
+  // ── Edit appointment (only when programada) ────────────────────
+  Future<void> _edit(Appointment appt) async {
+    final result = await Navigator.of(context).push<_AppointmentFormResult>(
+      MaterialPageRoute(
+        builder: (_) => _AppointmentFormPage(editingAppointment: appt),
+      ),
+    );
+    if (result == null || !mounted) return;
+
+    final success = await _controller.update(
+      id: appt.id,
+      tipo: result.tipo,
+      fecha: result.fecha,
+      hora: result.hora,
+      duracionMinutos: result.duracionMinutos,
+      odontologoId: result.odontologoId,
+      odontologoNombre: result.odontologoNombre,
+      pacienteNombre: result.pacienteNombre,
+      pacienteTelefono: result.pacienteTelefono,
+      motivo: result.motivo,
+      notas: result.notas,
+      nombreTemporal: result.nombreTemporal,
+      telefonoTemporal: result.telefonoTemporal,
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? 'Cita actualizada correctamente.'
+              : _controller.errorMessage ?? 'Error al actualizar.',
+        ),
+      ),
+    );
+  }
+
   // ── Change status ──────────────────────────────────────────────
   Future<void> _showStatusSheet(Appointment appt) async {
     final nextStates = AppointmentStatus.nextStates(appt.estado);
@@ -496,6 +533,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                                 _controller.updatingId == appt.id,
                             onChangeStatus: () => _showStatusSheet(appt),
                             onLinkPatient: () => _linkPatient(appt),
+                            onEdit: () => _edit(appt),
                           ),
                         );
                       },
@@ -568,6 +606,7 @@ class _AppointmentCard extends StatelessWidget {
     required this.isUpdating,
     required this.onChangeStatus,
     required this.onLinkPatient,
+    required this.onEdit,
   });
 
   final Appointment appointment;
@@ -575,6 +614,7 @@ class _AppointmentCard extends StatelessWidget {
   final bool isUpdating;
   final VoidCallback onChangeStatus;
   final VoidCallback onLinkPatient;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -792,6 +832,39 @@ class _AppointmentCard extends StatelessWidget {
                     ),
             ),
           ),
+            // ── Edit button for programada appointments ──
+            if (appointment.estado == AppointmentStatus.programada)
+              Padding(
+                padding: const EdgeInsets.only(
+                  left: AppSpacing.lg,
+                  right: AppSpacing.lg,
+                  bottom: AppSpacing.md,
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 40,
+                  child: OutlinedButton.icon(
+                    onPressed: isUpdating ? null : onEdit,
+                    icon: const Icon(Icons.edit_rounded, size: 18),
+                    label: const Text(
+                      'Editar cita',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.info,
+                      side: BorderSide(
+                          color: AppColors.info.withValues(alpha: 0.5)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.lg),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+              ),
             // ── Link patient button for unlinked first-consult ──
             if (appointment.esPrimeraConsulta &&
                 !appointment.tieneExpediente &&
@@ -1323,7 +1396,10 @@ class _AppointmentFormResult {
 }
 
 class _AppointmentFormPage extends StatefulWidget {
-  const _AppointmentFormPage();
+  const _AppointmentFormPage({this.editingAppointment});
+
+  /// When non-null the form opens in edit mode with pre-filled values.
+  final Appointment? editingAppointment;
 
   @override
   State<_AppointmentFormPage> createState() => _AppointmentFormPageState();
@@ -1363,12 +1439,104 @@ class _AppointmentFormPageState extends State<_AppointmentFormPage> {
   final _motivoCtrl = TextEditingController();
   final _notasCtrl = TextEditingController();
 
+  bool get _isEditing => widget.editingAppointment != null;
+
   @override
   void initState() {
     super.initState();
     _odontCtrl = getIt<OdontologistController>();
     _patientCtrl = getIt<PatientController>();
     _apptCtrl = getIt<AppointmentController>();
+
+    // Pre-fill when editing an existing appointment.
+    final appt = widget.editingAppointment;
+    if (appt != null) {
+      _tipo = appt.tipo;
+      _fecha = appt.fecha;
+      _duracionMinutos = appt.duracionMinutos;
+      _selectedHora = appt.hora;
+      _odontologoId = appt.odontologoId;
+      _odontologoNombre = appt.odontologoNombre;
+      _motivoCtrl.text = appt.motivo ?? '';
+      _notasCtrl.text = appt.notas ?? '';
+
+      if (appt.esPrimeraConsulta) {
+        _nombreTempCtrl.text = appt.nombreTemporal ?? appt.pacienteNombre;
+        _telTempCtrl.text = appt.telefonoTemporal ?? appt.pacienteTelefono;
+      }
+
+      // Odontologist / patient pre-selection: wait until controllers
+      // have finished loading before attempting to match.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _waitAndPreselect(appt);
+      });
+    }
+  }
+
+  /// Waits for the odontologist (and patient) controllers to be loaded,
+  /// then pre-selects the matching records and loads time slots.
+  void _waitAndPreselect(Appointment appt) {
+    // If already loaded, preselect immediately.
+    if (!_odontCtrl.isLoading) {
+      _preselectOdontologist();
+      if (!appt.esPrimeraConsulta && appt.pacienteId != null) {
+        _preselectPatient(appt.pacienteId!);
+      }
+      return;
+    }
+
+    // Otherwise listen for changes until the controller finishes loading.
+    void listener() {
+      if (!_odontCtrl.isLoading) {
+        _odontCtrl.removeListener(listener);
+        if (!mounted) return;
+        _preselectOdontologist();
+        if (!appt.esPrimeraConsulta && appt.pacienteId != null) {
+          _waitAndPreselectPatient(appt.pacienteId!);
+        }
+      }
+    }
+
+    _odontCtrl.addListener(listener);
+  }
+
+  /// Waits for the patient controller to be loaded, then pre-selects.
+  void _waitAndPreselectPatient(String patientId) {
+    if (!_patientCtrl.isLoading) {
+      _preselectPatient(patientId);
+      return;
+    }
+
+    void listener() {
+      if (!_patientCtrl.isLoading) {
+        _patientCtrl.removeListener(listener);
+        if (!mounted) return;
+        _preselectPatient(patientId);
+      }
+    }
+
+    _patientCtrl.addListener(listener);
+  }
+
+  /// Pre-selects the odontologist from the list and loads time slots.
+  void _preselectOdontologist() {
+    final odonts =
+        _odontCtrl.odontologists.where((o) => o.activo).toList();
+    final match = odonts.where((o) => o.id == _odontologoId).firstOrNull;
+    if (match != null) {
+      setState(() => _selectedOdontologist = match);
+      _loadTimeSlots();
+    }
+  }
+
+  /// Pre-selects the patient from the list.
+  void _preselectPatient(String patientId) {
+    final patients =
+        _patientCtrl.patients.where((p) => p.activo).toList();
+    final match = patients.where((p) => p.id == patientId).firstOrNull;
+    if (match != null) {
+      setState(() => _selectedPatient = match);
+    }
   }
 
   @override
@@ -1403,6 +1571,9 @@ class _AppointmentFormPageState extends State<_AppointmentFormPage> {
   Future<void> _loadTimeSlots() async {
     if (_selectedOdontologist == null) return;
 
+    // Save the editing appointment's hour so it stays selected.
+    final preserveHora = _isEditing ? widget.editingAppointment!.hora : null;
+
     setState(() {
       _loadingSlots = true;
       _selectedHora = null;
@@ -1416,13 +1587,26 @@ class _AppointmentFormPageState extends State<_AppointmentFormPage> {
       );
 
       if (!mounted) return;
+
+      // When editing, exclude the current appointment from "occupied" slots
+      // so its own slot shows as available.
+      final filtered = _isEditing
+          ? existing
+                .where((a) => a.id != widget.editingAppointment!.id)
+                .toList()
+          : existing;
+
       setState(() {
         _slots = TimeSlotGrid.buildSlots(
           horaInicio: _selectedOdontologist!.horaInicio,
           horaFin: _selectedOdontologist!.horaFin,
           fecha: _fecha,
-          existingAppointments: existing,
+          existingAppointments: filtered,
         );
+        // Restore previously selected hora in edit mode.
+        if (preserveHora != null) {
+          _selectedHora = preserveHora;
+        }
         _loadingSlots = false;
       });
     } catch (_) {
@@ -1499,7 +1683,7 @@ class _AppointmentFormPageState extends State<_AppointmentFormPage> {
     final dateText = DateFormat('EEE d MMM yyyy', 'es').format(_fecha);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Nueva cita')),
+      appBar: AppBar(title: Text(_isEditing ? 'Editar cita' : 'Nueva cita')),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -1924,8 +2108,10 @@ class _AppointmentFormPageState extends State<_AppointmentFormPage> {
             // ── Submit ─────────────────────────
             FilledButton.icon(
               onPressed: _submit,
-              icon: const Icon(Icons.event_available_rounded),
-              label: const Text('Agendar cita'),
+              icon: Icon(_isEditing
+                  ? Icons.save_rounded
+                  : Icons.event_available_rounded),
+              label: Text(_isEditing ? 'Guardar cambios' : 'Agendar cita'),
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(52),
               ),

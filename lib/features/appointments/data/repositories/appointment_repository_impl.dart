@@ -66,6 +66,13 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
     String? pacienteId,
     String? pacienteNombre,
     String? pacienteTelefono,
+    DateTime? fecha,
+    String? odontologoId,
+    String? odontologoNombre,
+    int? duracionMinutos,
+    String? tipo,
+    String? nombreTemporal,
+    String? telefonoTemporal,
   }) =>
       _ds.update(
         id: id,
@@ -76,5 +83,12 @@ class AppointmentRepositoryImpl implements AppointmentRepository {
         pacienteId: pacienteId,
         pacienteNombre: pacienteNombre,
         pacienteTelefono: pacienteTelefono,
+        fecha: fecha,
+        odontologoId: odontologoId,
+        odontologoNombre: odontologoNombre,
+        duracionMinutos: duracionMinutos,
+        tipo: tipo,
+        nombreTemporal: nombreTemporal,
+        telefonoTemporal: telefonoTemporal,
       );
 }

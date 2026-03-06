@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../app/di/service_locator.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/gradient_header.dart';
 import '../../../appointments/domain/entities/appointment.dart';
+import '../../../billing/presentation/controllers/billing_controller.dart';
 import '../../../inventory/domain/entities/inventory_item.dart';
 import '../../../inventory/presentation/controllers/inventory_controller.dart';
 import '../../../treatments/domain/entities/treatment.dart';
@@ -219,6 +221,34 @@ class _ClinicalRecordFormPageState extends State<ClinicalRecordFormPage> {
         );
       }
       if (!mounted) return;
+
+      // ── Quick-pay prompt ────────────────────────────────────
+      final apptForPay = widget.appointment;
+      final paid = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius:
+              BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (_) => _QuickPaymentSheet(
+          pacienteId: apptForPay.pacienteId ?? '',
+          pacienteNombre: apptForPay.pacienteNombre,
+          totalConsulta: _total,
+        ),
+      );
+
+      if (!mounted) return;
+
+      if (paid == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Pago registrado correctamente.'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+
       Navigator.of(context).pop(true); // signal success
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -999,6 +1029,337 @@ class _QtyControl extends StatelessWidget {
           borderRadius: BorderRadius.circular(6),
         ),
         child: Icon(icon, size: 16, color: AppColors.primary),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// QUICK PAYMENT BOTTOM SHEET
+// ══════════════════════════════════════════════════════════════════
+
+/// Shown right after a clinical record is saved so the user can register
+/// the payment without leaving the screen.
+class _QuickPaymentSheet extends StatefulWidget {
+  const _QuickPaymentSheet({
+    required this.pacienteId,
+    required this.pacienteNombre,
+    required this.totalConsulta,
+  });
+
+  final String pacienteId;
+  final String pacienteNombre;
+  final double totalConsulta;
+
+  @override
+  State<_QuickPaymentSheet> createState() => _QuickPaymentSheetState();
+}
+
+class _QuickPaymentSheetState extends State<_QuickPaymentSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _montoCtrl;
+  final _notasCtrl = TextEditingController();
+  String _metodoPago = 'efectivo';
+  bool _saving = false;
+
+  final _currencyFmt = NumberFormat('#,##0.00', 'en');
+
+  static const _metodos = {
+    'efectivo': ('Efectivo', Icons.payments_rounded),
+    'tarjeta': ('Tarjeta', Icons.credit_card_rounded),
+    'transferencia': ('Transferencia', Icons.account_balance_rounded),
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _montoCtrl =
+        TextEditingController(text: widget.totalConsulta.toStringAsFixed(2));
+  }
+
+  @override
+  void dispose() {
+    _montoCtrl.dispose();
+    _notasCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pay() async {
+    if (!_formKey.currentState!.validate()) return;
+    final monto = double.tryParse(_montoCtrl.text.replaceAll(',', '.'));
+    if (monto == null || monto <= 0) return;
+
+    setState(() => _saving = true);
+
+    final billingCtrl = getIt<BillingController>();
+    final ok = await billingCtrl.addPayment(
+      pacienteId: widget.pacienteId,
+      pacienteNombre: widget.pacienteNombre,
+      monto: monto,
+      metodoPago: _metodoPago,
+      notas: _notasCtrl.text.trim().isEmpty ? null : _notasCtrl.text.trim(),
+    );
+    billingCtrl.dispose();
+
+    if (!mounted) return;
+    setState(() => _saving = false);
+    Navigator.of(context).pop(ok);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.xxl,
+          AppSpacing.sm,
+          AppSpacing.xxl,
+          MediaQuery.of(context).viewInsets.bottom + AppSpacing.xxl,
+        ),
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Handle ───────────────────────────────────
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.onSurfaceVariant
+                          .withValues(alpha: 0.3),
+                      borderRadius: AppSpacing.borderRadiusSm,
+                    ),
+                  ),
+                ),
+
+                // ── Header ──────────────────────────────────
+                Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(Icons.payments_rounded,
+                          color: Colors.white, size: 24),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('¿Registrar cobro?',
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              )),
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.pacienteNombre,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+
+                // ── Total de la consulta ─────────────────────
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.08),
+                    borderRadius: AppSpacing.borderRadiusMd,
+                    border: Border.all(
+                      color: AppColors.success.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.receipt_long_rounded,
+                          color: AppColors.success, size: 22),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Text(
+                          'Total de la consulta',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        'Q ${_currencyFmt.format(widget.totalConsulta)}',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.success,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                const Divider(),
+                const SizedBox(height: AppSpacing.lg),
+
+                // ── Monto a pagar ────────────────────────────
+                Text('Monto a cobrar',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    )),
+                const SizedBox(height: AppSpacing.sm),
+                TextFormField(
+                  controller: _montoCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(
+                        RegExp(r'^\d+\.?\d{0,2}')),
+                  ],
+                  decoration: InputDecoration(
+                    labelText: 'Monto (Q)',
+                    prefixIcon: const Icon(Icons.attach_money_rounded),
+                    helperText:
+                        'Puede modificar para pago parcial.',
+                    helperStyle: theme.textTheme.bodySmall?.copyWith(
+                      color: AppColors.info,
+                    ),
+                  ),
+                  validator: (v) {
+                    final m =
+                        double.tryParse(v?.replaceAll(',', '.') ?? '');
+                    if (m == null || m <= 0) return 'Ingresa un monto válido.';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: AppSpacing.lg),
+
+                // ── Método de pago ───────────────────────────
+                Text('Método de pago',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    )),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: _metodos.entries.map((e) {
+                    final selected = _metodoPago == e.key;
+                    return Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.only(
+                          right: e.key != 'transferencia'
+                              ? AppSpacing.sm
+                              : 0,
+                        ),
+                        child: ChoiceChip(
+                          label: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(e.value.$2, size: 16),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  e.value.$1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ],
+                          ),
+                          selected: selected,
+                          onSelected: (_) =>
+                              setState(() => _metodoPago = e.key),
+                          showCheckmark: false,
+                          selectedColor:
+                              AppColors.primary.withValues(alpha: 0.15),
+                          labelStyle: TextStyle(
+                            color: selected
+                                ? AppColors.primary
+                                : theme.colorScheme.onSurfaceVariant,
+                            fontWeight: selected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+
+                // ── Notas ────────────────────────────────────
+                TextFormField(
+                  controller: _notasCtrl,
+                  textCapitalization: TextCapitalization.sentences,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Notas (opcional)',
+                    prefixIcon: Icon(Icons.notes_rounded),
+                    alignLabelWithHint: true,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xxl),
+
+                // ── Buttons ──────────────────────────────────
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed:
+                            _saving ? null : () => Navigator.of(context).pop(false),
+                        icon: const Icon(Icons.schedule_rounded, size: 18),
+                        label: const Text('Cobrar después'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      flex: 2,
+                      child: FilledButton.icon(
+                        onPressed: _saving ? null : _pay,
+                        icon: _saving
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.check_circle_rounded, size: 20),
+                        label: Text(_saving ? 'Guardando...' : 'Registrar pago'),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(50),
+                          backgroundColor: AppColors.success,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -137,6 +137,13 @@ class AppointmentController extends ChangeNotifier {
     String? pacienteId,
     String? pacienteNombre,
     String? pacienteTelefono,
+    DateTime? fecha,
+    String? odontologoId,
+    String? odontologoNombre,
+    int? duracionMinutos,
+    String? tipo,
+    String? nombreTemporal,
+    String? telefonoTemporal,
   }) async {
     _updatingId = id;
     _errorMessage = null;
@@ -151,6 +158,13 @@ class AppointmentController extends ChangeNotifier {
         pacienteId: pacienteId,
         pacienteNombre: pacienteNombre,
         pacienteTelefono: pacienteTelefono,
+        fecha: fecha,
+        odontologoId: odontologoId,
+        odontologoNombre: odontologoNombre,
+        duracionMinutos: duracionMinutos,
+        tipo: tipo,
+        nombreTemporal: nombreTemporal,
+        telefonoTemporal: telefonoTemporal,
       );
       return true;
     } on AppException catch (e) {
